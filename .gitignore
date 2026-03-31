@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+*.env
+python/ai_server/.env
+
+# Python
+**/__pycache__/
+*.pyc
+
+# VS Code
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/rad.json
+
+# Build artifacts
+*.app
+.alpackages/
+node_modules/
+dist/
+.venv/

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Itinerary Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1><i class="fas fa-map-marked-alt"></i> Travel Agency ERP - Itinerary Map</h1>
+      <div class="controls">
+        <button id="btn-load-services" class="secondary" title="Show all available services on map">
+          <i class="fas fa-globe"></i> All Services
+        </button>
+        <input id="reservationNo" placeholder="Reservation No. (e.g., R001)" />
+        <button id="btn-bc" title="Generate itinerary for reservation">
+          <i class="fas fa-magic"></i> Generate Itinerary
+        </button>
+        <button id="btn-print" class="secondary" title="Print Itinerary">
+          <i class="fas fa-print"></i> Print
+        </button>
+      </div>
+    </header>
+
+    <div class="main-container">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>Itinerary Details</h2>
+        </div>
+        <div id="itinerary-content" class="itinerary-content">
+          <!-- Itinerary days will be injected here -->
+        </div>
+      </aside>
+      
+      <main class="map-container">
+        <div id="map"></div>
+        <div id="day-toggles" style="position: absolute; top: 10px; right: 10px; z-index: 1000;"></div>
+      </main>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Processing request...</p>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="js/app.js"></script>
+  </body>
+</html>
