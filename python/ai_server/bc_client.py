@@ -59,7 +59,7 @@ def fetch_travel_offer_by_id(token: str, base_url: str, company_name: str, endpo
 
 class BCClient:
     def __init__(self, base_url: Optional[str] = None, company_name: Optional[str] = None):
-        self.base_url = base_url or os.getenv("BC_BASE_URL", "http://localhost:7048/BC250")
+        self.base_url = base_url or os.getenv("BC_BASE_URL", "http://saif-pc:7049/BC250")
         self.company_name = company_name or os.getenv("BC_COMPANY_NAME", "smart travel agency")
         self.auth_mode = os.getenv("BC_AUTH", "basic").lower()
         self.username = os.getenv("BC_USERNAME", "")
@@ -84,7 +84,7 @@ class BCClient:
     def travel_services(self) -> List[Dict]:
         r = self.session.get(f"{self._company_root()}/TravelServiceAPI", auth=self._auth(), timeout=20)
         r.raise_for_status()
-        return r.json().get("value", [])
+        return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
 
     def travel_client(self, client_no: str) -> Optional[Dict]:
         url = f"{self._company_root()}/TravelClientAPI?$filter=no eq '{client_no}'"

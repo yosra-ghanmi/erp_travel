@@ -57,3 +57,9 @@ export const createExpense = async (expenseData) => {
   const { data } = await api.post('/api/expenses', expenseData)
   return data
 }
+
+// Services
+export const fetchServices = async () => {
+  const { data } = await api.get('/api/services')
+  return data.services
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, DataTable, Input, Panel, Select } from '../components/ui'
 import { fetchBookings, createBooking, fetchClients } from '../services/erpApi'
 
@@ -11,7 +11,7 @@ const initialForm = {
   notes: ''
 }
 
-export function BookingsPage({ agencyId }) {
+export function BookingsPage() {
   const [bookings, setBookings] = useState([])
   const [clients, setClients] = useState([])
   const [form, setForm] = useState(initialForm)

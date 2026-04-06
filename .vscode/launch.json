@@ -1,24 +1,24 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Your own server",
-            "request": "launch",
-            "type": "al",
-            "environmentType": "OnPrem",
-            "server": "http://yosra-ghanmi:8080/BC250/",
-            "serverInstance": "BC250",
-            "port": 7049,
-            "authentication": "Windows",
-            "startupObjectId": 50613,
-            "startupObjectType": "Page",
-            "breakOnError": "All",
-            "launchBrowser": true,
-            "enableLongRunningSqlStatements": true,
-            "enableSqlInformationDebugger": true,
-            "tenant": "default",
-            "schemaUpdateMode": "ForceSync",
-            "usePublicURLFromServer": true
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Your own server",
+      "request": "launch",
+      "type": "al",
+      "environmentType": "OnPrem",
+      "server": "http://SAIF-PC:8080/BC250/",
+      "serverInstance": "BC250",
+      "port": 7049,
+      "authentication": "Windows",
+      "startupObjectId": 50613,
+      "startupObjectType": "Page",
+      "breakOnError": "All",
+      "launchBrowser": true,
+      "enableLongRunningSqlStatements": true,
+      "enableSqlInformationDebugger": true,
+      "tenant": "default",
+      "schemaUpdateMode": "ForceSync",
+      "usePublicURLFromServer": true
+    }
+  ]
 }

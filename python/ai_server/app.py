@@ -207,6 +207,19 @@ def create_expense(expense: ExpenseCreate, company_name: str | None = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- SERVICES ---
+
+@app.get("/api/services")
+def get_services(company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        services = bc.travel_services()
+        return {"services": services}
+    except Exception as e:
+        logger.error(f"Error fetching services: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- AI ITINERARY ---
 
 @app.post("/generate", response_model=GenerateResponse)
