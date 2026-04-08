@@ -66,6 +66,7 @@ class BCClient:
         self.password = os.getenv("BC_PASSWORD", "")
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
+        self._company_id = None
 
     def _auth(self):
         if self.auth_mode == "sspi":
@@ -74,6 +75,27 @@ class BCClient:
             return HttpNtlmAuth(self.username, self.password)  # type: ignore
         return HTTPBasicAuth(self.username, self.password)
 
+    def _get_company_id(self) -> str:
+        if self._company_id:
+            return self._company_id
+        
+        # Try to resolve company name to ID via OData
+        url = f"{self._api_root()}/Company"
+        try:
+            r = self.session.get(url, auth=self._auth(), timeout=10)
+            r.raise_for_status()
+            companies = r.json().get("value", [])
+            for c in companies:
+                name = c.get("Name", "")
+                if name.lower() == self.company_name.lower():
+                    self._company_id = c.get("Id")
+                    return self._company_id
+        except Exception:
+            pass
+
+        # Fallback: if we can't get ID, we'll try to use the name in quotes as a last resort
+        return quote(self.company_name, safe="")
+
     def _api_root(self) -> str:
         return _normalize_odata_root(self.base_url)
 
@@ -81,17 +103,77 @@ class BCClient:
         company_encoded = quote(self.company_name, safe="")
         return f"{self._api_root()}/Company('{company_encoded}')"
 
+    def _api_company_root(self, publisher: str = "SmartTravel", group: str = "Travel", version: str = "v1.0") -> str:
+        base = self.base_url.rstrip("/")
+        cid = self._get_company_id()
+        # If CID looks like a GUID, use it directly. Otherwise use quotes.
+        cid_str = cid if "-" in str(cid) else f"'{cid}'"
+        return f"{base}/api/{publisher}/{group}/{version}/companies({cid_str})"
+
+    def _handle_error(self, r: requests.Response, prefix: str) -> str:
+        try:
+            err_data = r.json()
+            if isinstance(err_data, dict):
+                msg = err_data.get("error", {}).get("message", r.text)
+                return f"{prefix}: {msg}"
+        except Exception:
+            pass
+        return f"{prefix}: Status {r.status_code} - {r.text[:200]}"
+
     def travel_services(self) -> List[Dict]:
-        r = self.session.get(f"{self._company_root()}/TravelServiceAPI", auth=self._auth(), timeout=20)
-        r.raise_for_status()
-        return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        try:
+            r = self.session.get(f"{self._company_root()}/TravelServiceAPI", auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelServices"
+            try:
+                r = self.session.get(url, auth=self._auth(), timeout=20)
+                r.raise_for_status()
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            except Exception as e2:
+                raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+
+    def create_travel_service(self, service_data: Dict) -> Dict:
+        """Create a new service in Business Central."""
+        try:
+            url = f"{self._company_root()}/TravelServiceAPI"
+            r = self.session.post(url, auth=self._auth(), json=service_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelServices"
+            try:
+                r = self.session.post(url, auth=self._auth(), json=service_data, timeout=20)
+                r.raise_for_status()
+                return {k.lower(): v for k, v in r.json().items()}
+            except Exception as e2:
+                raise Exception(f"BC Create Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+
+    def delete_travel_service(self, service_code: str) -> None:
+        """Delete a service from Business Central."""
+        try:
+            url = f"{self._company_root()}/TravelServiceAPI('{service_code}')"
+            r = self.session.delete(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+        except Exception:
+            url = f"{self._api_company_root()}/travelServices('{service_code}')"
+            r = self.session.delete(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
 
     def travel_client(self, client_no: str) -> Optional[Dict]:
-        url = f"{self._company_root()}/TravelClientAPI?$filter=no eq '{client_no}'"
-        r = self.session.get(url, auth=self._auth(), timeout=20)
-        r.raise_for_status()
-        arr = r.json().get("value", [])
-        return arr[0] if arr else None
+        try:
+            url = f"{self._company_root()}/TravelClientAPI?$filter=no eq '{client_no}'"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            arr = r.json().get("value", [])
+            return arr[0] if arr else None
+        except Exception:
+            url = f"{self._api_company_root()}/travelClients?$filter=no eq '{client_no}'"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            arr = r.json().get("value", [])
+            return arr[0] if arr else None
 
     def reservations_for_client(self, client_no: str) -> List[Dict]:
         url = f"{self._company_root()}/TravelReservationAPI?$filter=clientNo eq '{client_no}'"
@@ -108,29 +190,39 @@ class BCClient:
 
     def create_travel_client(self, client_data: Dict) -> Dict:
         """Create a new client in Business Central."""
-        url = f"{self._company_root()}/TravelClientAPI"
-        r = self.session.post(url, auth=self._auth(), json=client_data, timeout=20)
         try:
+            url = f"{self._company_root()}/TravelClientAPI"
+            r = self.session.post(url, auth=self._auth(), json=client_data, timeout=20)
             r.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            # Provide more detailed OData error if available
+            data = r.json()
+            return {k.lower(): v for k, v in data.items()}
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelClients"
             try:
-                odata_error = r.json().get("error", {}).get("message", str(e))
-                raise Exception(odata_error)
-            except Exception:
-                raise e
-        # Normalize keys to lowercase for the frontend
-        data = r.json()
-        return {k.lower(): v for k, v in data.items()}
+                r = self.session.post(url, auth=self._auth(), json=client_data, timeout=20)
+                r.raise_for_status()
+                data = r.json()
+                return {k.lower(): v for k, v in data.items()}
+            except Exception as e2:
+                raise Exception(f"BC Create Failed. OData Error: {str(e)}. API Error: {str(e2)}")
 
     def travel_clients(self) -> List[Dict]:
         """Fetch all clients from Business Central."""
-        url = f"{self._company_root()}/TravelClientAPI"
-        r = self.session.get(url, auth=self._auth(), timeout=20)
-        r.raise_for_status()
-        values = r.json().get("value", [])
-        # Normalize keys to lowercase for the frontend
-        return [{k.lower(): v for k, v in item.items()} for item in values]
+        try:
+            url = f"{self._company_root()}/TravelClientAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            values = r.json().get("value", [])
+            return [{k.lower(): v for k, v in item.items()} for item in values]
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelClients"
+            try:
+                r = self.session.get(url, auth=self._auth(), timeout=20)
+                r.raise_for_status()
+                values = r.json().get("value", [])
+                return [{k.lower(): v for k, v in item.items()} for item in values]
+            except Exception as e2:
+                raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
 
     def create_travel_booking(self, booking_data: Dict) -> Dict:
         url = f"{self._company_root()}/TravelBookingAPI"
@@ -139,22 +231,205 @@ class BCClient:
         return {k.lower(): v for k, v in r.json().items()}
 
     def travel_bookings(self) -> List[Dict]:
-        url = f"{self._company_root()}/TravelBookingAPI"
-        r = self.session.get(url, auth=self._auth(), timeout=20)
-        r.raise_for_status()
-        return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        try:
+            url = f"{self._company_root()}/TravelBookingAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelBookings"
+            try:
+                r = self.session.get(url, auth=self._auth(), timeout=20)
+                r.raise_for_status()
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            except Exception as e2:
+                raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+
+    def create_travel_reservation(self, reservation_data: Dict) -> Dict:
+        try:
+            url = f"{self._company_root()}/TravelReservationAPI"
+            r = self.session.post(url, auth=self._auth(), json=reservation_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelReservations"
+            try:
+                r = self.session.post(url, auth=self._auth(), json=reservation_data, timeout=20)
+                r.raise_for_status()
+                return {k.lower(): v for k, v in r.json().items()}
+            except Exception as e2:
+                raise Exception(f"BC Create Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+
+    def travel_reservations(self) -> List[Dict]:
+        try:
+            url = f"{self._company_root()}/TravelReservationAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelReservations"
+            try:
+                r = self.session.get(url, auth=self._auth(), timeout=20)
+                r.raise_for_status()
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            except Exception as e2:
+                raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
 
     def create_travel_payment(self, payment_data: Dict) -> Dict:
-        url = f"{self._company_root()}/TravelPaymentAPI"
-        r = self.session.post(url, auth=self._auth(), json=payment_data, timeout=20)
-        r.raise_for_status()
-        return {k.lower(): v for k, v in r.json().items()}
+        try:
+            url = f"{self._company_root()}/TravelPaymentAPI"
+            r = self.session.post(url, auth=self._auth(), json=payment_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelPayments"
+            try:
+                r = self.session.post(url, auth=self._auth(), json=payment_data, timeout=20)
+                r.raise_for_status()
+                return {k.lower(): v for k, v in r.json().items()}
+            except Exception as e2:
+                raise Exception(f"BC Create Failed. OData Error: {str(e)}. API Error: {str(e2)}")
 
     def travel_payments(self) -> List[Dict]:
-        url = f"{self._company_root()}/TravelPaymentAPI"
-        r = self.session.get(url, auth=self._auth(), timeout=20)
-        r.raise_for_status()
-        return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        try:
+            url = f"{self._company_root()}/TravelPaymentAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception as e:
+            url = f"{self._api_company_root()}/travelPayments"
+            try:
+                r = self.session.get(url, auth=self._auth(), timeout=20)
+                r.raise_for_status()
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            except Exception as e2:
+                raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+
+    # --- QUOTES ---
+
+    def travel_quotes(self) -> List[Dict]:
+        errors = []
+        try:
+            # Try OData first
+            url = f"{self._company_root()}/TravelQuoteAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        # Fallback to API Page URL
+        url = f"{self._api_company_root()}/travelQuotes"
+        try:
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to fetch quotes. Details: {' | '.join(errors)}")
+
+    def create_travel_quote(self, quote_data: Dict) -> Dict:
+        errors = []
+        try:
+            # Try OData first
+            url = f"{self._company_root()}/TravelQuoteAPI"
+            r = self.session.post(url, auth=self._auth(), json=quote_data, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        # Fallback to API Page URL
+        url = f"{self._api_company_root()}/travelQuotes"
+        try:
+            r = self.session.post(url, auth=self._auth(), json=quote_data, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to create quote. Details: {' | '.join(errors)}")
+
+    def update_travel_quote(self, quote_no: str, quote_data: Dict) -> Dict:
+        errors = []
+        headers = self.session.headers.copy()
+        headers["If-Match"] = "*"
+        try:
+            # Try OData first
+            url = f"{self._company_root()}/TravelQuoteAPI('{quote_no}')"
+            r = self.session.patch(url, auth=self._auth(), json=quote_data, headers=headers, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        # Fallback to API Page URL
+        url = f"{self._api_company_root()}/travelQuotes('{quote_no}')"
+        try:
+            r = self.session.patch(url, auth=self._auth(), json=quote_data, headers=headers, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to update quote. Details: {' | '.join(errors)}")
+
+    # --- INVOICES ---
+
+    def travel_invoices(self) -> List[Dict]:
+        errors = []
+        try:
+            # Try OData first
+            url = f"{self._company_root()}/TravelInvoiceAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        # Fallback to API Page URL
+        url = f"{self._api_company_root()}/travelInvoices"
+        try:
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to fetch invoices. Details: {' | '.join(errors)}")
+
+    def create_travel_invoice(self, invoice_data: Dict) -> Dict:
+        errors = []
+        try:
+            # Try OData first
+            url = f"{self._company_root()}/TravelInvoiceAPI"
+            r = self.session.post(url, auth=self._auth(), json=invoice_data, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        # Fallback to API Page URL
+        url = f"{self._api_company_root()}/travelInvoices"
+        try:
+            r = self.session.post(url, auth=self._auth(), json=invoice_data, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to create invoice. Details: {' | '.join(errors)}")
 
     def create_travel_expense(self, expense_data: Dict) -> Dict:
         url = f"{self._company_root()}/TravelExpenseAPI"

@@ -87,8 +87,8 @@ class TravelService(BaseModel):
 
 
 class Reservation(BaseModel):
-    reservation_no: str = Field(..., alias="reservationNo", description="Reservation number")
-    client_id: str = Field(..., alias="clientId", description="Client ID")
+    reservation_no: Optional[str] = Field(None, alias="reservationNo", description="Reservation number")
+    client_no: str = Field(..., alias="clientNo", description="Client No.")
     service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
     reservation_date: Optional[date] = Field(None, alias="reservationDate", description="Reservation date")
     status: Optional[str] = Field(None, description="Reservation status")
@@ -134,6 +134,40 @@ class GenerateResponse(BaseModel):
     days: List[ItineraryDay]
     recommendations: Optional[List[str]] = Field(None, description="General recommendations")
     source: str = Field(..., description="Source of generation: 'ai' or 'fallback'")
+
+    class Config:
+        populate_by_name = True
+
+
+class TravelQuote(BaseModel):
+    quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
+    service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
+    client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
+    client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
+    quote_date: Optional[date] = Field(None, alias="quoteDate", description="Quote date")
+    valid_until_date: Optional[date] = Field(None, alias="validUntilDate", description="Valid until date")
+    status: Optional[str] = Field(None, description="Status (Draft, Sent, Accepted, Rejected, Expired)")
+    total_amount: Optional[float] = Field(None, alias="totalAmount", description="Total amount")
+    currency_code: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
+    ai_summary: Optional[str] = Field(None, alias="aiSummary", description="AI itinerary summary")
+
+    class Config:
+        populate_by_name = True
+
+
+class TravelInvoice(BaseModel):
+    invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
+    quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
+    service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
+    client_no: str = Field(..., alias="clientNo", description="Client number")
+    client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
+    invoice_date: Optional[date] = Field(None, alias="invoiceDate", description="Invoice date")
+    due_date: Optional[date] = Field(None, alias="dueDate", description="Due date")
+    status: Optional[str] = Field(None, description="Status (Open, Partial, Paid, Overdue)")
+    total_amount: Optional[float] = Field(None, alias="totalAmount", description="Total amount")
+    amount_paid: Optional[float] = Field(None, alias="amountPaid", description="Amount paid")
+    balance_due: Optional[float] = Field(None, alias="balanceDue", description="Balance due")
+    currency_code: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
 
     class Config:
         populate_by_name = True

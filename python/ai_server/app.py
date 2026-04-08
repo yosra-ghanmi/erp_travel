@@ -1,6 +1,10 @@
 import os
 import logging
 import time
+import json
+from dotenv import load_dotenv
+
+load_dotenv()
 from datetime import date
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -25,6 +29,8 @@ from models import (
     SyncOffersResponse,
     GenerateItineraryRequest,
     PremiumItineraryResponse,
+    TravelQuote,
+    TravelInvoice,
 )
 from ai import generate_itinerary
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
@@ -217,6 +223,125 @@ def get_services(company_name: str | None = None):
         return {"services": services}
     except Exception as e:
         logger.error(f"Error fetching services: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/services")
+def create_service(service: TravelService, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        payload = service.dict(by_alias=True, exclude_none=True)
+        if not payload.get("code"):
+            payload["code"] = f"SV-{int(time.time())}"
+        return bc.create_travel_service(payload)
+    except Exception as e:
+        logger.error(f"Error creating service in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/services/{service_code}")
+def delete_service(service_code: str, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        bc.delete_travel_service(service_code)
+        return {"status": "success", "message": f"Service {service_code} deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting service in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- RESERVATIONS ---
+
+@app.get("/api/reservations")
+def get_reservations(company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        reservations = bc.travel_reservations()
+        return {"reservations": reservations}
+    except Exception as e:
+        logger.error(f"Error fetching reservations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/reservations")
+def create_reservation(reservation: Reservation, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        payload = reservation.dict(by_alias=True, exclude_none=True)
+        if not payload.get("reservationNo"):
+            payload["reservationNo"] = f"RES-{int(time.time())}"
+        return bc.create_travel_reservation(payload)
+    except Exception as e:
+        logger.error(f"Error creating reservation in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- QUOTES ---
+
+@app.get("/api/quotes")
+def get_quotes(company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        quotes = bc.travel_quotes()
+        return {"quotes": quotes}
+    except Exception as e:
+        logger.error(f"Error fetching quotes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/quotes")
+def create_quote(quote: TravelQuote, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        # Use .json() to ensure dates and other objects are serialized to strings, 
+        # then loads() back to dict for the bc_client which uses requests(json=...)
+        payload = json.loads(quote.json(by_alias=True, exclude_none=True))
+        # Clean empty strings
+        payload = {k: v for k, v in payload.items() if v != ""}
+        
+        if not payload.get("quoteNo"):
+            payload["quoteNo"] = f"QT-{int(time.time())}"
+        return bc.create_travel_quote(payload)
+    except Exception as e:
+        logger.error(f"Error creating quote in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/quotes/{quote_no}")
+def update_quote(quote_no: str, quote: TravelQuote, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        payload = json.loads(quote.json(by_alias=True, exclude_none=True))
+        logger.info(f"Updating quote {quote_no} with payload: {payload}")
+        return bc.update_travel_quote(quote_no, payload)
+    except Exception as e:
+        logger.error(f"Error updating quote in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- INVOICES ---
+
+@app.get("/api/invoices")
+def get_invoices(company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        invoices = bc.travel_invoices()
+        return {"invoices": invoices}
+    except Exception as e:
+        logger.error(f"Error fetching invoices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/invoices")
+def create_invoice(invoice: TravelInvoice, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        payload = json.loads(invoice.json(by_alias=True, exclude_none=True))
+        if not payload.get("invoiceNo"):
+            payload["invoiceNo"] = f"INV-{int(time.time())}"
+        return bc.create_travel_invoice(payload)
+    except Exception as e:
+        logger.error(f"Error creating invoice in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

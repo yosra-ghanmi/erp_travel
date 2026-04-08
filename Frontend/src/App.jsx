@@ -13,7 +13,6 @@ import { agencies, aiUsageLogs } from "./data/mockData";
 import { defaultModuleByRole, modulesByRole } from "./data/modules";
 import { DashboardPage } from "./modules/DashboardPage";
 import { ClientsPage } from "./modules/ClientsPage";
-import { BookingsPage } from "./modules/BookingsPage";
 import { PaymentsPage } from "./modules/PaymentsPage";
 import { ExpensesPage } from "./modules/ExpensesPage";
 import { FinancialDashboard } from "./modules/FinancialDashboard";
@@ -29,12 +28,17 @@ import { ForgotPasswordPage } from "./modules/ForgotPasswordPage";
 import { UnauthorizedPage } from "./modules/UnauthorizedPage";
 import { ServicesPage } from "./modules/ServicesPage";
 import { TravelOffersPage } from "./modules/TravelOffersPage";
+import { QuotesPage } from "./modules/QuotesPage";
+import { BookingsPage as NewBookingsPage } from "./modules/ReservationsPage";
 import { tFor, getDir } from "./i18n";
 import {
   fetchBookings,
   fetchClients,
   fetchPayments,
   fetchServices,
+  fetchReservations,
+  fetchQuotes,
+  fetchInvoices,
 } from "./services/erpApi";
 
 const normalizeClient = (client) => ({
@@ -172,6 +176,8 @@ function AppWorkspace() {
   const [trips, setTrips] = useState([]);
   const [payments, setPayments] = useState([]);
   const [services, setServices] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [serviceUsage, setServiceUsage] = useState([]);
   const [tenantAgencies, setTenantAgencies] = useState(agencies);
   const [settings, setSettings] = useState({
@@ -215,13 +221,23 @@ function AppWorkspace() {
 
     const loadWorkspaceData = async () => {
       try {
-        const [clientRows, bookingRows, paymentRows, serviceRows] =
-          await Promise.all([
-            fetchClients(),
-            fetchBookings(),
-            fetchPayments(),
-            fetchServices(),
-          ]);
+        const [
+          clientRows,
+          bookingRows,
+          paymentRows,
+          serviceRows,
+          reservationRows,
+          quoteRows,
+          invoiceRows,
+        ] = await Promise.all([
+          fetchClients(),
+          fetchBookings(),
+          fetchPayments(),
+          fetchServices(),
+          fetchReservations(),
+          fetchQuotes(),
+          fetchInvoices(),
+        ]);
 
         if (cancelled) return;
 
@@ -229,11 +245,30 @@ function AppWorkspace() {
         const nextBookings = (bookingRows ?? []).map(normalizeBooking);
         const nextPayments = (paymentRows ?? []).map(normalizePayment);
         const nextServices = (serviceRows ?? []).map(normalizeService);
+        const nextQuotes = (quoteRows ?? []).map((q) => ({
+          ...q,
+          id: q.quoteno || q.quoteNo || `QT-${Date.now()}`,
+        }));
+        const nextInvoices = (invoiceRows ?? []).map((i) => ({
+          ...i,
+          id: i.invoiceno || i.invoiceNo || `INV-${Date.now()}`,
+        }));
+        const nextUsage = (reservationRows ?? []).map((r) => ({
+          id: r.reservationno || r.id,
+          agency_id: agencyId,
+          serviceId: r.servicecode,
+          clientId: r.clientno,
+          status: r.status,
+          at: r.reservationdate,
+        }));
 
         setClients(nextClients);
         setBookings(nextBookings);
         setPayments(nextPayments);
         setServices(nextServices);
+        setQuotes(nextQuotes);
+        setInvoices(nextInvoices);
+        setServiceUsage(nextUsage);
         setNotifications(buildNotifications(nextBookings, nextPayments));
       } catch (error) {
         if (!cancelled) {
@@ -438,7 +473,10 @@ function AppWorkspace() {
       );
     }
     if (resolvedModuleKey === "bookings") {
-      return <BookingsPage agencyId={agencyId} />;
+      return <NewBookingsPage agencyId={agencyId} />;
+    }
+    if (resolvedModuleKey === "quotes") {
+      return <QuotesPage agencyId={agencyId} />;
     }
     if (resolvedModuleKey === "agency_finances") {
       return <FinancialDashboard />;
