@@ -164,18 +164,10 @@ def get_payments(company_name: str | None = None):
 
 
 @app.post("/api/payments")
-def create_payment(payment: PaymentCreate, company_name: str | None = None):
+def create_payment(payment: TravelPayment, company_name: str | None = None):
     try:
         bc = BCClient(company_name=company_name)
-        payment_id = f"PAY-{int(time.time())}"
-        payload = {
-            "paymentId": payment_id,
-            "clientNo": payment.clientNo,
-            "bookingId": payment.bookingId,
-            "amount": payment.amount,
-            "method": payment.method,
-            "date": payment.date.isoformat()
-        }
+        payload = json.loads(payment.json(by_alias=True, exclude_none=True))
         return bc.create_travel_payment(payload)
     except Exception as e:
         logger.error(f"Error creating payment in BC: {e}")
@@ -371,7 +363,7 @@ def sync_offers():
     if not tenant_id or not client_id or not client_secret or not base_url:
         # Fallback for demo if no OAuth config
         return SyncOffersResponse(offers=[])
-        
+
     token = get_azure_ad_token(tenant_id, client_id, client_secret, scope)
     raw_offers = fetch_travel_offers(token, base_url, company_name, endpoint)
     offers = []

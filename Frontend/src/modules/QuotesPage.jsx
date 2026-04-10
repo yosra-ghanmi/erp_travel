@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   Button,
   DataTable,
@@ -19,6 +21,8 @@ import {
 const initialForm = {
   clientNo: "",
   serviceCode: "",
+  serviceCodes: [], // For multiple services
+  discount_percent: 0,
   // Environment Note: Business Central license restricts dates to specific months (Nov, Dec, Jan, Feb)
   quoteDate: "2026-01-15",
   validUntilDate: "2026-02-15",
@@ -33,6 +37,8 @@ export function QuotesPage({ agencyId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [serviceSearch, setServiceSearch] = useState("");
 
   const normalize = (item, fields) => {
     const normalized = { ...item };
@@ -58,6 +64,15 @@ export function QuotesPage({ agencyId }) {
       clientNo: ["clientno", "client_no", "client_id"],
       clientName: ["clientname", "client_name", "name"],
       serviceCode: ["servicecode", "service_code"],
+      subtotal: ["subtotal"],
+      discount_percent: [
+        "discount_percent",
+        "discount_percentage",
+        "discountpercent",
+        "discount_perc",
+        "discount",
+      ],
+      discountAmount: ["discountamount", "discount_amount"],
       totalAmount: ["totalamount", "total_amount", "amount"],
       currencyCode: ["currencycode", "currency_code", "currency"],
       quoteDate: ["quotedate", "quote_date", "date"],
@@ -118,7 +133,13 @@ export function QuotesPage({ agencyId }) {
     setError("");
     setMessage("");
     try {
-      const result = await createQuote(form);
+      // If multiple services are selected, we pass them as serviceCodes
+      const quoteData = { ...form };
+      if (form.serviceCodes.length > 0) {
+        quoteData.serviceCode = ""; // Clear singular if multiple are used
+      }
+
+      const result = await createQuote(quoteData);
       const normalizedResult = normalizeQuote(result);
       setQuotes((prev) => [...prev, normalizedResult]);
       setForm(initialForm);
@@ -173,20 +194,129 @@ export function QuotesPage({ agencyId }) {
         quoteNo: quote.quoteNo,
         clientNo: quote.clientNo,
         serviceCode: quote.serviceCode,
-        invoiceDate: new Date().toISOString().slice(0, 10),
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .slice(0, 10),
+        // Environment Note: BC license restricts dates to specific months (Nov, Dec, Jan, Feb)
+        invoiceDate: "2026-01-20",
+        dueDate: "2026-02-20",
         status: "Open",
         currencyCode: quote.currencyCode || "USD",
       };
       await createInvoice(invoiceData);
       setMessage(`Invoice generated successfully for Quote ${quote.quoteNo}.`);
     } catch (err) {
-      setError("Failed to generate invoice.");
+      const detail =
+        err.response?.data?.detail || err.message || "Unknown error";
+      setError(`Failed to generate invoice: ${detail}`);
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadPDF = (quote) => {
+    try {
+      setMessage(`Generating PDF for Quote ${quote.quoteNo}...`);
+      setError("");
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(40, 40, 40);
+      doc.text("TRAVEL QUOTE", pageWidth / 2, 20, { align: "center" });
+
+      // Agency Info
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Smart Travel Agency", 14, 30);
+      doc.text("123 Travel Avenue, Tourism City", 14, 35);
+
+      // Quote Details
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Quote No: ${quote.quoteNo}`, 14, 50);
+      doc.text(`Date: ${quote.quoteDate || "N/A"}`, 14, 57);
+      doc.text(`Valid Until: ${quote.validUntilDate || "N/A"}`, 14, 64);
+
+      // Client Info
+      const clientName =
+        quote.clientName ||
+        clients.find((c) => c.id === quote.clientNo || c.no === quote.clientNo)
+          ?.name ||
+        quote.clientNo ||
+        "N/A";
+      doc.text(`Client: ${clientName}`, 14, 75);
+
+      // Services Table
+      const tableRows = [
+        [
+          quote.serviceCode || "Travel Services",
+          `${quote.subtotal || quote.totalAmount || 0} ${
+            quote.currencyCode || "USD"
+          }`,
+        ],
+      ];
+
+      autoTable(doc, {
+        startY: 85,
+        head: [["Service Description", "Amount"]],
+        body: tableRows,
+        theme: "striped",
+        headStyles: { fillColor: [41, 128, 185] },
+      });
+
+      const finalY = doc.lastAutoTable.finalY + 10;
+
+      // Totals
+      doc.setFontSize(11);
+      if (quote.discount_percent > 0) {
+        doc.text(
+          `Subtotal: ${quote.subtotal || 0} ${quote.currencyCode || "USD"}`,
+          pageWidth - 80,
+          finalY
+        );
+        doc.text(
+          `Discount (${quote.discount_percent}%): -${
+            quote.discountAmount || 0
+          } ${quote.currencyCode || "USD"}`,
+          pageWidth - 80,
+          finalY + 7
+        );
+        doc.setFontSize(13);
+        doc.setFont(undefined, "bold");
+        doc.text(
+          `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
+          pageWidth - 80,
+          finalY + 16
+        );
+      } else {
+        doc.setFontSize(13);
+        doc.setFont(undefined, "bold");
+        doc.text(
+          `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
+          pageWidth - 80,
+          finalY
+        );
+      }
+
+      // Footer
+      doc.setFontSize(9);
+      doc.setFont(undefined, "normal");
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        "Thank you for choosing Smart Travel Agency!",
+        pageWidth / 2,
+        280,
+        {
+          align: "center",
+        }
+      );
+
+      doc.save(`Quote_${quote.quoteNo}.pdf`);
+      setMessage(`PDF for Quote ${quote.quoteNo} downloaded successfully.`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      setError(`Failed to generate PDF: ${err.message || "Internal Error"}`);
     }
   };
 
@@ -233,6 +363,14 @@ export function QuotesPage({ agencyId }) {
                   </td>
                   <td className="px-2 py-3">
                     <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => downloadPDF(quote)}
+                        title="Download PDF"
+                      >
+                        PDF
+                      </Button>
                       {status === "Draft" && (
                         <Button
                           variant="ghost"
@@ -262,7 +400,7 @@ export function QuotesPage({ agencyId }) {
                           variant="primary"
                           onClick={() => generateInvoice(quote)}
                         >
-                          Generate Invoice
+                          To Invoice
                         </Button>
                       )}
                     </div>
@@ -276,8 +414,13 @@ export function QuotesPage({ agencyId }) {
       <Panel title="Create New Quote">
         <div className="space-y-3">
           <label className="text-[10px] uppercase font-bold text-slate-400">
-            Client
+            Client Search
           </label>
+          <Input
+            placeholder="Search client..."
+            value={clientSearch}
+            onChange={(e) => setClientSearch(e.target.value)}
+          />
           <Select
             value={form.clientNo}
             onChange={(e) =>
@@ -285,31 +428,75 @@ export function QuotesPage({ agencyId }) {
             }
           >
             <option value="">Select client</option>
-            {clients.map((client) => (
-              <option
-                key={client.no || client.id}
-                value={client.no || client.id}
-              >
-                {client.name}
-              </option>
-            ))}
+            {clients
+              .filter((c) =>
+                c.name.toLowerCase().includes(clientSearch.toLowerCase())
+              )
+              .map((client) => (
+                <option
+                  key={client.no || client.id}
+                  value={client.no || client.id}
+                >
+                  {client.name}
+                </option>
+              ))}
           </Select>
 
           <label className="text-[10px] uppercase font-bold text-slate-400">
-            Linked Service (Optional)
+            Service Search
+          </label>
+          <Input
+            placeholder="Search service..."
+            value={serviceSearch}
+            onChange={(e) => setServiceSearch(e.target.value)}
+          />
+          <Select
+            multiple
+            value={form.serviceCodes}
+            onChange={(e) => {
+              const options = Array.from(
+                e.target.selectedOptions,
+                (opt) => opt.value
+              );
+              setForm((prev) => ({ ...prev, serviceCodes: options }));
+            }}
+            className="h-24"
+          >
+            {services
+              .filter(
+                (s) =>
+                  s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+                  s.serviceCode
+                    .toLowerCase()
+                    .includes(serviceSearch.toLowerCase())
+              )
+              .map((service) => (
+                <option key={service.serviceCode} value={service.serviceCode}>
+                  {service.serviceCode} - {service.name}
+                </option>
+              ))}
+          </Select>
+          <p className="text-[9px] text-slate-400 italic">
+            Hold Ctrl/Cmd to select multiple
+          </p>
+
+          <label className="text-[10px] uppercase font-bold text-slate-400">
+            Discount
           </label>
           <Select
-            value={form.serviceCode}
+            value={form.discount_percent}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, serviceCode: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                discount_percent: Number(e.target.value),
+              }))
             }
           >
-            <option value="">None</option>
-            {services.map((service) => (
-              <option key={service.serviceCode} value={service.serviceCode}>
-                {service.serviceCode} - {service.name}
-              </option>
-            ))}
+            <option value="0">No Discount</option>
+            <option value="5">5% Discount</option>
+            <option value="7">7% Discount</option>
+            <option value="10">10% Discount</option>
+            <option value="15">15% Discount (Max)</option>
           </Select>
 
           <label className="text-[10px] uppercase font-bold text-slate-400">

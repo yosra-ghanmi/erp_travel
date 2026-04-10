@@ -188,11 +188,46 @@ function AppWorkspace() {
     mfaSuperAdmin: true,
     strictTenantIsolation: true,
   });
-  const [notifications, setNotifications] = useState([
-    "New inquiry from website",
-    "Pending payment for BK-9002",
-    "Trip seats low for Japan Golden Route",
-  ]);
+
+  const [notifications, setNotifications] = useState(() => {
+    if (sessionUser?.id) {
+      const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
+      return saved
+        ? JSON.parse(saved)
+        : [
+            "New inquiry from website",
+            "Pending payment for BK-9002",
+            "Trip seats low for Japan Golden Route",
+          ];
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (sessionUser?.id) {
+      const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
+      setNotifications(
+        saved
+          ? JSON.parse(saved)
+          : [
+              "New inquiry from website",
+              "Pending payment for BK-9002",
+              "Trip seats low for Japan Golden Route",
+            ]
+      );
+    } else {
+      setNotifications([]);
+    }
+  }, [sessionUser?.id]);
+
+  useEffect(() => {
+    if (sessionUser?.id) {
+      localStorage.setItem(
+        `erp_notifications_${sessionUser.id}`,
+        JSON.stringify(notifications)
+      );
+    }
+  }, [notifications, sessionUser?.id]);
 
   const availableModules = useMemo(() => modulesByRole[role] ?? [], [role]);
   const resolvedModuleKey = availableModules.some(
@@ -428,10 +463,13 @@ function AppWorkspace() {
       resolvedModuleKey === "agency_dashboard" ||
       resolvedModuleKey === "my_dashboard"
     ) {
+      // Merge traditional bookings with service reservations for dashboard stats
+      const allBookings = [...scopedBookings, ...scopedServiceUsage];
       return (
         <DashboardPage
-          bookings={scopedBookings}
+          bookings={allBookings}
           clients={scopedClients}
+          payments={scopedPayments}
           revenueSeries={revenueSeries}
           activityFeed={activityFeed}
         />
@@ -501,8 +539,9 @@ function AppWorkspace() {
     }
     return (
       <DashboardPage
-        bookings={scopedBookings}
+        bookings={[...scopedBookings, ...scopedServiceUsage]}
         clients={scopedClients}
+        payments={scopedPayments}
         revenueSeries={revenueSeries}
         activityFeed={activityFeed}
       />

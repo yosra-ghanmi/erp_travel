@@ -276,19 +276,33 @@ class BCClient:
                 raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
 
     def create_travel_payment(self, payment_data: Dict) -> Dict:
+        import time
+        errors = []
+        # Generate unique ID if not provided
+        if not payment_data.get("paymentId"):
+            payment_data["paymentId"] = f"PAY-{int(time.time())}"
+            
         try:
+            # Try OData first
             url = f"{self._company_root()}/TravelPaymentAPI"
             r = self.session.post(url, auth=self._auth(), json=payment_data, timeout=20)
-            r.raise_for_status()
-            return {k.lower(): v for k, v in r.json().items()}
-        except Exception as e:
-            url = f"{self._api_company_root()}/travelPayments"
-            try:
-                r = self.session.post(url, auth=self._auth(), json=payment_data, timeout=20)
-                r.raise_for_status()
+            if r.ok:
                 return {k.lower(): v for k, v in r.json().items()}
-            except Exception as e2:
-                raise Exception(f"BC Create Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        # Fallback to API Page URL
+        url = f"{self._api_company_root()}/travelPayments"
+        try:
+            r = self.session.post(url, auth=self._auth(), json=payment_data, timeout=20)
+            if r.ok:
+                return {k.lower(): v for k, v in r.json().items()}
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to create payment. Details: {' | '.join(errors)}")
 
     def travel_payments(self) -> List[Dict]:
         try:
@@ -333,22 +347,69 @@ class BCClient:
 
     def create_travel_quote(self, quote_data: Dict) -> Dict:
         errors = []
+        # Support for multiple service codes
+        service_codes = quote_data.pop("serviceCodes", [])
+        
+        # Clean read-only fields before sending to BC
+        readonly_fields = ["subtotal", "discountAmount", "totalAmount", "clientName", "discount_amount"]
+        clean_payload = {k: v for k, v in quote_data.items() if k not in readonly_fields}
+        
+        # Ensure we don't send empty strings if they should be null
+        clean_payload = {k: (None if v == "" else v) for k, v in clean_payload.items()}
+        
         try:
-            # Try OData first
+            # Create Header
             url = f"{self._company_root()}/TravelQuoteAPI"
-            r = self.session.post(url, auth=self._auth(), json=quote_data, timeout=20)
-            if r.ok:
-                return {k.lower(): v for k, v in r.json().items()}
-            errors.append(self._handle_error(r, "OData"))
+            r = self.session.post(url, auth=self._auth(), json=clean_payload, timeout=20)
+            if not r.ok:
+                errors.append(self._handle_error(r, "OData Header"))
+            else:
+                header_res = r.json()
+                quote_no = header_res.get("quoteNo")
+                
+                # Create Lines if multiple services provided
+                if quote_no and service_codes:
+                    for i, sc in enumerate(service_codes):
+                        line_payload = {
+                            "quoteNo": quote_no,
+                            "lineNo": (i + 1) * 10000,
+                            "serviceCode": sc,
+                            "quantity": 1
+                        }
+                        l_url = f"{self._company_root()}/TravelQuoteLineAPI"
+                        self.session.post(l_url, auth=self._auth(), json=line_payload, timeout=10)
+                    
+                    # Refresh header to get correct total amount
+                    r = self.session.get(f"{url}('{quote_no}')", auth=self._auth(), timeout=10)
+                    if r.ok:
+                        header_res = r.json()
+                
+                return {k.lower(): v for k, v in header_res.items()}
+                
         except Exception as e:
-            errors.append(f"OData: {str(e)}")
+            errors.append(f"Header: {str(e)}")
 
         # Fallback to API Page URL
         url = f"{self._api_company_root()}/travelQuotes"
         try:
-            r = self.session.post(url, auth=self._auth(), json=quote_data, timeout=20)
+            r = self.session.post(url, auth=self._auth(), json=clean_payload, timeout=20)
             if r.ok:
-                return {k.lower(): v for k, v in r.json().items()}
+                header_res = r.json()
+                quote_no = header_res.get("quoteNo")
+                if quote_no and service_codes:
+                    for i, sc in enumerate(service_codes):
+                        line_payload = {
+                            "quoteNo": quote_no,
+                            "lineNo": (i + 1) * 10000,
+                            "serviceCode": sc,
+                            "quantity": 1
+                        }
+                        l_url = f"{self._api_company_root()}/travelQuoteLines"
+                        self.session.post(l_url, auth=self._auth(), json=line_payload, timeout=10)
+                    r = self.session.get(f"{url}('{quote_no}')", auth=self._auth(), timeout=10)
+                    if r.ok:
+                        header_res = r.json()
+                return {k.lower(): v for k, v in header_res.items()}
             errors.append(self._handle_error(r, "API"))
         except Exception as e:
             errors.append(f"API: {str(e)}")

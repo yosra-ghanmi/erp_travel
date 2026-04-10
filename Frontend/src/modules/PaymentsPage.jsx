@@ -165,14 +165,22 @@ export function PaymentsPage() {
             >
               <option value="">Select Invoice</option>
               {invoices
-                .filter((i) => (i.status || "Open") !== "Paid")
+                .filter(
+                  (i) =>
+                    (i.status || "Open").toLowerCase() !== "fully paid" &&
+                    (i.status || "Open").toLowerCase() !== "paid"
+                )
                 .map((inv) => (
                   <option
                     key={inv.invoiceno || inv.invoiceNo}
                     value={inv.invoiceno || inv.invoiceNo}
                   >
                     {inv.invoiceno || inv.invoiceNo} - (Due: $
-                    {inv.balancedue || inv.balanceDue})
+                    {inv.balancedue ||
+                      inv.balanceDue ||
+                      inv.totalamount ||
+                      inv.totalAmount}
+                    )
                   </option>
                 ))}
             </Select>

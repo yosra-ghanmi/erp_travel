@@ -45,7 +45,7 @@ class Payment(BaseModel):
     bookingId: str
     amount: float
     method: str  # cash, card, transfer
-    date: date
+    payment_date: date = Field(..., alias="date")
 
 
 class PaymentCreate(BaseModel):
@@ -53,21 +53,21 @@ class PaymentCreate(BaseModel):
     bookingId: str
     amount: float
     method: str
-    date: date
+    payment_date: date = Field(..., alias="date")
 
 
 class Expense(BaseModel):
     expenseId: str
     type: str  # Hotel, Transport, etc.
     amount: float
-    date: date
+    expense_date: date = Field(..., alias="date")
     description: Optional[str] = None
 
 
 class ExpenseCreate(BaseModel):
     type: str
     amount: float
-    date: date
+    expense_date: date = Field(..., alias="date")
     description: Optional[str] = None
 
 
@@ -147,9 +147,14 @@ class TravelQuote(BaseModel):
     quote_date: Optional[date] = Field(None, alias="quoteDate", description="Quote date")
     valid_until_date: Optional[date] = Field(None, alias="validUntilDate", description="Valid until date")
     status: Optional[str] = Field(None, description="Status (Draft, Sent, Accepted, Rejected, Expired)")
+    subtotal: Optional[float] = Field(None, description="Subtotal")
+    discount_percent: Optional[float] = Field(None, alias="discount_percent", description="Discount percentage")
+    discount_amount: Optional[float] = Field(None, alias="discountAmount", description="Discount amount")
     total_amount: Optional[float] = Field(None, alias="totalAmount", description="Total amount")
     currency_code: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
     ai_summary: Optional[str] = Field(None, alias="aiSummary", description="AI itinerary summary")
+    # Added for multiple services support
+    service_codes: Optional[List[str]] = Field(None, alias="serviceCodes", description="List of service codes")
 
     class Config:
         populate_by_name = True
@@ -168,6 +173,19 @@ class TravelInvoice(BaseModel):
     amount_paid: Optional[float] = Field(None, alias="amountPaid", description="Amount paid")
     balance_due: Optional[float] = Field(None, alias="balanceDue", description="Balance due")
     currency_code: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
+
+    class Config:
+        populate_by_name = True
+
+
+class TravelPayment(BaseModel):
+    payment_id: Optional[str] = Field(None, alias="paymentId", description="Payment ID")
+    client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
+    booking_id: Optional[str] = Field(None, alias="bookingId", description="Booking ID")
+    invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
+    amount: float = Field(..., description="Payment amount")
+    method: str = Field(..., description="Payment method")
+    payment_date: date = Field(..., alias="date", description="Payment date")
 
     class Config:
         populate_by_name = True

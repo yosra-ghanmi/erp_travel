@@ -32,10 +32,7 @@ export function Layout({
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
-  const [notificationsData] = useState([
-    "Agency X just joined",
-    "AI Limit reached for Agency Y",
-  ]);
+
   const languageOptions = [
     { value: "en", label: "EN" },
     { value: "fr", label: "FR" },
@@ -172,30 +169,38 @@ export function Layout({
                     aria-label="Notifications"
                   >
                     <Bell className="h-4 w-4" />
-                    <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 text-[10px] text-white">
-                      {notificationsData.length || notifications.length}
-                    </span>
+                    {notifications.length > 0 && (
+                      <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 text-[10px] text-white">
+                        {notifications.length}
+                      </span>
+                    )}
                   </button>
                   {isNotificationsOpen ? (
                     <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-slate-900">
-                      {notificationsData.map((item) => (
-                        <div
-                          key={item}
-                          className="group mb-2 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-md last:mb-0 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-cyan-500/60 dark:hover:bg-slate-800"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-cyan-500 transition-transform duration-200 group-hover:scale-110" />
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium text-slate-800 transition-colors dark:text-slate-100">
-                                New Notification
-                              </p>
-                              <p className="mt-1 text-xs leading-5 text-slate-600 transition-colors dark:text-slate-300">
-                                {item}
-                              </p>
+                      {notifications.length > 0 ? (
+                        notifications.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="group mb-2 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-md last:mb-0 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-cyan-500/60 dark:hover:bg-slate-800"
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-cyan-500 transition-transform duration-200 group-hover:scale-110" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-slate-800 transition-colors dark:text-slate-100">
+                                  New Notification
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-slate-600 transition-colors dark:text-slate-300">
+                                  {item}
+                                </p>
+                              </div>
                             </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                          No new notifications
                         </div>
-                      ))}
+                      )}
                     </div>
                   ) : null}
                 </div>
