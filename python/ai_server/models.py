@@ -97,6 +97,14 @@ class Reservation(BaseModel):
         populate_by_name = True
 
 
+class EmailRequest(BaseModel):
+    to_email: str
+    subject: str
+    body: str
+    attachment_base64: Optional[str] = None
+    filename: Optional[str] = "document.pdf"
+
+
 class BCIngestPayload(BaseModel):
     client: Client
     reservation: Reservation

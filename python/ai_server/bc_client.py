@@ -225,10 +225,16 @@ class BCClient:
                 raise Exception(f"BC Data Access Failed. OData Error: {str(e)}. API Error: {str(e2)}")
 
     def create_travel_booking(self, booking_data: Dict) -> Dict:
-        url = f"{self._company_root()}/TravelBookingAPI"
-        r = self.session.post(url, auth=self._auth(), json=booking_data, timeout=20)
-        r.raise_for_status()
-        return {k.lower(): v for k, v in r.json().items()}
+        try:
+            url = f"{self._company_root()}/TravelBookingAPI"
+            r = self.session.post(url, auth=self._auth(), json=booking_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
+        except Exception:
+            url = f"{self._api_company_root()}/travelBookings"
+            r = self.session.post(url, auth=self._auth(), json=booking_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
 
     def travel_bookings(self) -> List[Dict]:
         try:
@@ -281,7 +287,7 @@ class BCClient:
         # Generate unique ID if not provided
         if not payment_data.get("paymentId"):
             payment_data["paymentId"] = f"PAY-{int(time.time())}"
-            
+
         try:
             # Try OData first
             url = f"{self._company_root()}/TravelPaymentAPI"
@@ -301,7 +307,7 @@ class BCClient:
             errors.append(self._handle_error(r, "API"))
         except Exception as e:
             errors.append(f"API: {str(e)}")
-        
+
         raise Exception(f"Failed to create payment. Details: {' | '.join(errors)}")
 
     def travel_payments(self) -> List[Dict]:
@@ -442,6 +448,50 @@ class BCClient:
         
         raise Exception(f"Failed to update quote. Details: {' | '.join(errors)}")
 
+    def travel_quote_lines(self, quote_no: str) -> List[Dict]:
+        errors = []
+        try:
+            url = f"{self._company_root()}/TravelQuoteLineAPI?$filter=quoteNo eq '{quote_no}'"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        try:
+            url = f"{self._api_company_root()}/travelQuoteLines?$filter=quoteNo eq '{quote_no}'"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        return []
+
+    def delete_travel_quote(self, quote_no: str) -> bool:
+        errors = []
+        headers = self.session.headers.copy()
+        headers["If-Match"] = "*"
+        try:
+            url = f"{self._company_root()}/TravelQuoteAPI('{quote_no}')"
+            r = self.session.delete(url, auth=self._auth(), headers=headers, timeout=20)
+            if r.ok:
+                return True
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        try:
+            url = f"{self._api_company_root()}/travelQuotes('{quote_no}')"
+            r = self.session.delete(url, auth=self._auth(), headers=headers, timeout=20)
+            if r.ok:
+                return True
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to delete quote. Details: {' | '.join(errors)}")
+
     # --- INVOICES ---
 
     def travel_invoices(self) -> List[Dict]:
@@ -489,17 +539,80 @@ class BCClient:
             errors.append(self._handle_error(r, "API"))
         except Exception as e:
             errors.append(f"API: {str(e)}")
-        
+
         raise Exception(f"Failed to create invoice. Details: {' | '.join(errors)}")
 
+    def travel_invoice_lines(self, invoice_no: str) -> List[Dict]:
+        errors = []
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            url = f"{self._company_root()}/TravelInvoiceLineAPI?$filter=invoiceNo eq '{invoice_no}'"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                lines = [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+                logger.info(f"Fetched {len(lines)} invoice lines for {invoice_no} via OData")
+                return lines
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        try:
+            url = f"{self._api_company_root()}/travelInvoiceLines?$filter=invoiceNo eq '{invoice_no}'"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            if r.ok:
+                lines = [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+                logger.info(f"Fetched {len(lines)} invoice lines for {invoice_no} via API")
+                return lines
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+
+        logger.warning(f"No invoice lines found for {invoice_no}. Errors: {errors}")
+        return []
+
+    def delete_travel_invoice(self, invoice_no: str) -> bool:
+        errors = []
+        headers = self.session.headers.copy()
+        headers["If-Match"] = "*"
+        try:
+            url = f"{self._company_root()}/TravelInvoiceAPI('{invoice_no}')"
+            r = self.session.delete(url, auth=self._auth(), headers=headers, timeout=20)
+            if r.ok:
+                return True
+            errors.append(self._handle_error(r, "OData"))
+        except Exception as e:
+            errors.append(f"OData: {str(e)}")
+
+        try:
+            url = f"{self._api_company_root()}/travelInvoices('{invoice_no}')"
+            r = self.session.delete(url, auth=self._auth(), headers=headers, timeout=20)
+            if r.ok:
+                return True
+            errors.append(self._handle_error(r, "API"))
+        except Exception as e:
+            errors.append(f"API: {str(e)}")
+        
+        raise Exception(f"Failed to delete invoice. Details: {' | '.join(errors)}")
+
     def create_travel_expense(self, expense_data: Dict) -> Dict:
-        url = f"{self._company_root()}/TravelExpenseAPI"
-        r = self.session.post(url, auth=self._auth(), json=expense_data, timeout=20)
-        r.raise_for_status()
-        return {k.lower(): v for k, v in r.json().items()}
+        try:
+            url = f"{self._company_root()}/TravelExpenseAPI"
+            r = self.session.post(url, auth=self._auth(), json=expense_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
+        except Exception:
+            url = f"{self._api_company_root()}/travelExpenses"
+            r = self.session.post(url, auth=self._auth(), json=expense_data, timeout=20)
+            r.raise_for_status()
+            return {k.lower(): v for k, v in r.json().items()}
 
     def travel_expenses(self) -> List[Dict]:
-        url = f"{self._company_root()}/TravelExpenseAPI"
-        r = self.session.get(url, auth=self._auth(), timeout=20)
-        r.raise_for_status()
-        return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        try:
+            url = f"{self._company_root()}/TravelExpenseAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+        except Exception:
+            url = f"{self._api_company_root()}/travelExpenses"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]

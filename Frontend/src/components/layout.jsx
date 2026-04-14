@@ -23,6 +23,7 @@ export function Layout({
   darkMode,
   onToggleDarkMode,
   notifications,
+  onMarkNotificationAsRead,
   pageTitle,
   homePath,
   sessionEmail,
@@ -169,9 +170,9 @@ export function Layout({
                     aria-label="Notifications"
                   >
                     <Bell className="h-4 w-4" />
-                    {notifications.length > 0 && (
+                    {notifications.filter((n) => !n.read).length > 0 && (
                       <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 text-[10px] text-white">
-                        {notifications.length}
+                        {notifications.filter((n) => !n.read).length}
                       </span>
                     )}
                   </button>
@@ -180,17 +181,38 @@ export function Layout({
                       {notifications.length > 0 ? (
                         notifications.map((item, idx) => (
                           <div
-                            key={idx}
-                            className="group mb-2 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-white hover:shadow-md last:mb-0 dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-cyan-500/60 dark:hover:bg-slate-800"
+                            key={item.id || idx}
+                            onMouseEnter={() =>
+                              !item.read && onMarkNotificationAsRead?.(item.id)
+                            }
+                            className={`group mb-2 cursor-pointer rounded-xl border p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 last:mb-0 ${
+                              item.read
+                                ? "border-slate-100 bg-white opacity-60 dark:border-slate-800 dark:bg-slate-900"
+                                : "border-slate-200 bg-slate-50 hover:border-cyan-300 hover:bg-white hover:shadow-md dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-cyan-500/60 dark:hover:bg-slate-800"
+                            }`}
                           >
                             <div className="flex items-start gap-3">
-                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-cyan-500 transition-transform duration-200 group-hover:scale-110" />
+                              {!item.read && (
+                                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-cyan-500 transition-transform duration-200 group-hover:scale-110" />
+                              )}
                               <div className="min-w-0">
-                                <p className="text-xs font-medium text-slate-800 transition-colors dark:text-slate-100">
-                                  New Notification
+                                <p
+                                  className={`text-xs font-medium transition-colors ${
+                                    item.read
+                                      ? "text-slate-400 dark:text-slate-500"
+                                      : "text-slate-800 dark:text-slate-100"
+                                  }`}
+                                >
+                                  {item.read ? "Read" : "New Notification"}
                                 </p>
-                                <p className="mt-1 text-xs leading-5 text-slate-600 transition-colors dark:text-slate-300">
-                                  {item}
+                                <p
+                                  className={`mt-1 text-xs leading-5 transition-colors ${
+                                    item.read
+                                      ? "text-slate-400 dark:text-slate-500"
+                                      : "text-slate-600 dark:text-slate-300"
+                                  }`}
+                                >
+                                  {item.message || item}
                                 </p>
                               </div>
                             </div>

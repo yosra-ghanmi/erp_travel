@@ -19,3 +19,4 @@ python/ai_server/.env
 node_modules/
 dist/
 .venv/
+.aider*

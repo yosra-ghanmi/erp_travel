@@ -150,8 +150,16 @@ const buildActivityFeed = (bookings, payments) =>
 const buildNotifications = (bookings, payments) => {
   const items = buildActivityFeed(bookings, payments)
     .slice(0, 3)
-    .map((item) => item.message);
-  return items.length ? items : ["Business Central data synced successfully"];
+    .map((item) => ({ id: item.id, message: item.message, read: false }));
+  return items.length
+    ? items
+    : [
+        {
+          id: "sync-success",
+          message: "Business Central data synced successfully",
+          read: false,
+        },
+      ];
 };
 
 function AppWorkspace() {
@@ -190,31 +198,71 @@ function AppWorkspace() {
   });
 
   const [notifications, setNotifications] = useState(() => {
+    const defaultNotifs = [
+      {
+        id: "notif-1",
+        message: "New inquiry from website",
+        read: false,
+      },
+      {
+        id: "notif-2",
+        message: "Pending payment for BK-9002",
+        read: false,
+      },
+      {
+        id: "notif-3",
+        message: "Trip seats low for Japan Golden Route",
+        read: false,
+      },
+    ];
     if (sessionUser?.id) {
       const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
-      return saved
-        ? JSON.parse(saved)
-        : [
-            "New inquiry from website",
-            "Pending payment for BK-9002",
-            "Trip seats low for Japan Golden Route",
-          ];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migrate old string format to new object format if needed
+        return parsed.map((n, idx) =>
+          typeof n === "string"
+            ? { id: `migrated-${idx}`, message: n, read: false }
+            : n
+        );
+      }
+      return defaultNotifs;
     }
     return [];
   });
 
   useEffect(() => {
+    const defaultNotifs = [
+      {
+        id: "notif-1",
+        message: "New inquiry from website",
+        read: false,
+      },
+      {
+        id: "notif-2",
+        message: "Pending payment for BK-9002",
+        read: false,
+      },
+      {
+        id: "notif-3",
+        message: "Trip seats low for Japan Golden Route",
+        read: false,
+      },
+    ];
     if (sessionUser?.id) {
       const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
-      setNotifications(
-        saved
-          ? JSON.parse(saved)
-          : [
-              "New inquiry from website",
-              "Pending payment for BK-9002",
-              "Trip seats low for Japan Golden Route",
-            ]
-      );
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setNotifications(
+          parsed.map((n, idx) =>
+            typeof n === "string"
+              ? { id: `migrated-${idx}`, message: n, read: false }
+              : n
+          )
+        );
+      } else {
+        setNotifications(defaultNotifs);
+      }
     } else {
       setNotifications([]);
     }
@@ -324,7 +372,22 @@ function AppWorkspace() {
   }, []);
 
   const pushNotification = (text) =>
-    setNotifications((prev) => [text, ...prev].slice(0, 8));
+    setNotifications((prev) =>
+      [
+        {
+          id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          message: text,
+          read: false,
+        },
+        ...prev,
+      ].slice(0, 8)
+    );
+
+  const markNotificationAsRead = (id) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+  };
 
   const scopeByAgency = (rows) => {
     if (!rows || !Array.isArray(rows)) return [];
@@ -560,6 +623,7 @@ function AppWorkspace() {
       darkMode={darkMode}
       onToggleDarkMode={() => setDarkMode((prev) => !prev)}
       notifications={notifications}
+      onMarkNotificationAsRead={markNotificationAsRead}
       pageTitle={activeModuleLabel}
       homePath={`/app/${defaultModuleByRole[role] ?? "platform_overview"}`}
       sessionEmail={sessionUser?.email}

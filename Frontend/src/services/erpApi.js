@@ -101,6 +101,16 @@ export const updateQuoteStatus = async (quoteNo, status) => {
   return data;
 };
 
+export const fetchQuoteLines = async (quoteNo) => {
+  const { data } = await api.get(`/api/quotes/${quoteNo}/lines`);
+  return data.lines;
+};
+
+export const deleteQuote = async (quoteNo) => {
+  const { data } = await api.delete(`/api/quotes/${quoteNo}`);
+  return data;
+};
+
 // Invoices
 export const fetchInvoices = async () => {
   const { data } = await api.get("/api/invoices");
@@ -109,5 +119,21 @@ export const fetchInvoices = async () => {
 
 export const createInvoice = async (invoiceData) => {
   const { data } = await api.post("/api/invoices", invoiceData);
+  return data;
+};
+
+export const fetchInvoiceLines = async (invoiceNo) => {
+  const { data } = await api.get(`/api/invoices/${invoiceNo}/lines`);
+  return data.lines;
+};
+
+export const deleteInvoice = async (invoiceNo) => {
+  const { data } = await api.delete(`/api/invoices/${invoiceNo}`);
+  return data;
+};
+
+// Mailing
+export const sendEmail = async (emailData) => {
+  const { data } = await api.post("/api/send-email", emailData);
   return data;
 };

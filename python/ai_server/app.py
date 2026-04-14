@@ -4,7 +4,7 @@ import time
 import json
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 from datetime import date
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -31,16 +31,19 @@ from models import (
     PremiumItineraryResponse,
     TravelQuote,
     TravelInvoice,
+    TravelPayment,
+    EmailRequest,
 )
 from ai import generate_itinerary
+from mailing import send_email_with_attachment
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
-from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+# Ensure we load from both current and parent directory with override
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=True)
 
 # Validate AI provider configuration at startup
 AI_PROVIDER = os.getenv("AI_PROVIDER", "").lower()
@@ -311,6 +314,28 @@ def update_quote(quote_no: str, quote: TravelQuote, company_name: str | None = N
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/quotes/{quote_no}/lines")
+def get_quote_lines(quote_no: str, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        lines = bc.travel_quote_lines(quote_no)
+        return {"lines": lines}
+    except Exception as e:
+        logger.error(f"Error fetching quote lines: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/quotes/{quote_no}")
+def delete_quote(quote_no: str, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        bc.delete_travel_quote(quote_no)
+        return {"status": "success", "message": f"Quote {quote_no} deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting quote in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- INVOICES ---
 
 @app.get("/api/invoices")
@@ -334,6 +359,49 @@ def create_invoice(invoice: TravelInvoice, company_name: str | None = None):
         return bc.create_travel_invoice(payload)
     except Exception as e:
         logger.error(f"Error creating invoice in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/invoices/{invoice_no}/lines")
+def get_invoice_lines(invoice_no: str, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        lines = bc.travel_invoice_lines(invoice_no)
+        return {"lines": lines}
+    except Exception as e:
+        logger.error(f"Error fetching invoice lines: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/invoices/{invoice_no}")
+def delete_invoice(invoice_no: str, company_name: str | None = None):
+    try:
+        bc = BCClient(company_name=company_name)
+        bc.delete_travel_invoice(invoice_no)
+        return {"status": "success", "message": f"Invoice {invoice_no} deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting invoice in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- MAILING ---
+
+@app.post("/api/send-email")
+def send_email(req: EmailRequest):
+    try:
+        success = send_email_with_attachment(
+            to_email=req.to_email,
+            subject=req.subject,
+            body=req.body,
+            attachment_base64=req.attachment_base64,
+            filename=req.filename
+        )
+        if success:
+            return {"status": "success", "message": "Email sent successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send email. Check server logs.")
+    except Exception as e:
+        logger.error(f"Error in send_email endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

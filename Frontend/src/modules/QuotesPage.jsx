@@ -16,6 +16,9 @@ import {
   fetchClients,
   fetchServices,
   createInvoice,
+  sendEmail,
+  fetchQuoteLines,
+  deleteQuote,
 } from "../services/erpApi";
 
 const initialForm = {
@@ -64,7 +67,7 @@ export function QuotesPage({ agencyId }) {
       clientNo: ["clientno", "client_no", "client_id"],
       clientName: ["clientname", "client_name", "name"],
       serviceCode: ["servicecode", "service_code"],
-      subtotal: ["subtotal"],
+      subtotal: ["subtotal", "sub_total"],
       discount_percent: [
         "discount_percent",
         "discount_percentage",
@@ -185,6 +188,25 @@ export function QuotesPage({ agencyId }) {
     }
   };
 
+  const handleDeleteQuote = async (quoteNo) => {
+    if (!window.confirm(`Are you sure you want to delete quote ${quoteNo}?`))
+      return;
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      await deleteQuote(quoteNo);
+      setQuotes((prev) => prev.filter((q) => q.quoteNo !== quoteNo));
+      setMessage(`Quote ${quoteNo} deleted successfully.`);
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail || err.message || "Failed to delete quote";
+      setError(`Delete Error: ${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const generateInvoice = async (quote) => {
     setLoading(true);
     setError("");
@@ -212,111 +234,192 @@ export function QuotesPage({ agencyId }) {
     }
   };
 
-  const downloadPDF = (quote) => {
+  const generatePDF = async (quote) => {
+    let lines = [];
+    try {
+      lines = await fetchQuoteLines(quote.quoteNo);
+    } catch (err) {
+      console.error("Failed to fetch quote lines:", err);
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text("TRAVEL QUOTE", pageWidth / 2, 20, { align: "center" });
+
+    // Agency Info
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Smart Travel Agency", 14, 30);
+    doc.text("123 Travel Avenue, Tourism City", 14, 35);
+
+    // Quote Details
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Quote No: ${quote.quoteNo}`, 14, 50);
+    doc.text(`Date: ${quote.quoteDate || "N/A"}`, 14, 57);
+    doc.text(`Valid Until: ${quote.validUntilDate || "N/A"}`, 14, 64);
+
+    // Client Info
+    const clientName =
+      quote.clientName ||
+      clients.find((c) => c.id === quote.clientNo || c.no === quote.clientNo)
+        ?.name ||
+      quote.clientNo ||
+      "N/A";
+    doc.text(`Client: ${clientName}`, 14, 75);
+
+    // Services Table
+    const tableRows =
+      lines.length > 0
+        ? lines.map((line) => [
+            line.servicename ||
+              line.service_name ||
+              line.description ||
+              line.servicecode ||
+              "Travel Service",
+            line.quantity || 1,
+            `${line.unitprice || line.unit_price || 0} ${
+              quote.currencyCode || "USD"
+            }`,
+            `${line.lineamount || line.line_amount || 0} ${
+              quote.currencyCode || "USD"
+            }`,
+          ])
+        : [
+            [
+              quote.serviceCode || "Travel Services",
+              1,
+              `${quote.subtotal || quote.totalAmount || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+              `${quote.subtotal || quote.totalAmount || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+            ],
+          ];
+
+    autoTable(doc, {
+      startY: 85,
+      head: [["Service Description", "Qty", "Unit Price", "Total"]],
+      body: tableRows,
+      theme: "striped",
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    const finalY = doc.lastAutoTable.finalY + 10;
+
+    // Totals
+    doc.setFontSize(11);
+    if (quote.discount_percent > 0) {
+      doc.text(
+        `Subtotal: ${quote.subtotal || 0} ${quote.currencyCode || "USD"}`,
+        pageWidth - 80,
+        finalY
+      );
+      doc.text(
+        `Discount (${quote.discount_percent}%): -${quote.discountAmount || 0} ${
+          quote.currencyCode || "USD"
+        }`,
+        pageWidth - 80,
+        finalY + 7
+      );
+      doc.setFontSize(13);
+      doc.setFont(undefined, "bold");
+      doc.text(
+        `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
+        pageWidth - 80,
+        finalY + 16
+      );
+    } else {
+      doc.setFontSize(13);
+      doc.setFont(undefined, "bold");
+      doc.text(
+        `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
+        pageWidth - 80,
+        finalY
+      );
+    }
+
+    // Footer
+    doc.setFontSize(9);
+    doc.setFont(undefined, "normal");
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      "Thank you for choosing Smart Travel Agency!",
+      pageWidth / 2,
+      280,
+      {
+        align: "center",
+      }
+    );
+    return doc;
+  };
+
+  const downloadPDF = async (quote) => {
     try {
       setMessage(`Generating PDF for Quote ${quote.quoteNo}...`);
       setError("");
-
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-
-      // Header
-      doc.setFontSize(20);
-      doc.setTextColor(40, 40, 40);
-      doc.text("TRAVEL QUOTE", pageWidth / 2, 20, { align: "center" });
-
-      // Agency Info
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text("Smart Travel Agency", 14, 30);
-      doc.text("123 Travel Avenue, Tourism City", 14, 35);
-
-      // Quote Details
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Quote No: ${quote.quoteNo}`, 14, 50);
-      doc.text(`Date: ${quote.quoteDate || "N/A"}`, 14, 57);
-      doc.text(`Valid Until: ${quote.validUntilDate || "N/A"}`, 14, 64);
-
-      // Client Info
-      const clientName =
-        quote.clientName ||
-        clients.find((c) => c.id === quote.clientNo || c.no === quote.clientNo)
-          ?.name ||
-        quote.clientNo ||
-        "N/A";
-      doc.text(`Client: ${clientName}`, 14, 75);
-
-      // Services Table
-      const tableRows = [
-        [
-          quote.serviceCode || "Travel Services",
-          `${quote.subtotal || quote.totalAmount || 0} ${
-            quote.currencyCode || "USD"
-          }`,
-        ],
-      ];
-
-      autoTable(doc, {
-        startY: 85,
-        head: [["Service Description", "Amount"]],
-        body: tableRows,
-        theme: "striped",
-        headStyles: { fillColor: [41, 128, 185] },
-      });
-
-      const finalY = doc.lastAutoTable.finalY + 10;
-
-      // Totals
-      doc.setFontSize(11);
-      if (quote.discount_percent > 0) {
-        doc.text(
-          `Subtotal: ${quote.subtotal || 0} ${quote.currencyCode || "USD"}`,
-          pageWidth - 80,
-          finalY
-        );
-        doc.text(
-          `Discount (${quote.discount_percent}%): -${
-            quote.discountAmount || 0
-          } ${quote.currencyCode || "USD"}`,
-          pageWidth - 80,
-          finalY + 7
-        );
-        doc.setFontSize(13);
-        doc.setFont(undefined, "bold");
-        doc.text(
-          `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
-          pageWidth - 80,
-          finalY + 16
-        );
-      } else {
-        doc.setFontSize(13);
-        doc.setFont(undefined, "bold");
-        doc.text(
-          `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
-          pageWidth - 80,
-          finalY
-        );
-      }
-
-      // Footer
-      doc.setFontSize(9);
-      doc.setFont(undefined, "normal");
-      doc.setTextColor(150, 150, 150);
-      doc.text(
-        "Thank you for choosing Smart Travel Agency!",
-        pageWidth / 2,
-        280,
-        {
-          align: "center",
-        }
-      );
-
+      const doc = await generatePDF(quote);
       doc.save(`Quote_${quote.quoteNo}.pdf`);
       setMessage(`PDF for Quote ${quote.quoteNo} downloaded successfully.`);
     } catch (err) {
       console.error("PDF generation failed:", err);
       setError(`Failed to generate PDF: ${err.message || "Internal Error"}`);
+    }
+  };
+
+  const sendQuoteEmail = async (quote) => {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const client = clients.find(
+        (c) => c.id === quote.clientNo || c.no === quote.clientNo
+      );
+      const to_email = client?.email;
+
+      if (!to_email) {
+        throw new Error(
+          `Client ${
+            client?.name || quote.clientNo
+          } does not have an email address.`
+        );
+      }
+
+      setMessage(`Preparing email for ${to_email}...`);
+      const doc = await generatePDF(quote);
+      const pdfBase64 = doc.output("datauristring");
+
+      const emailData = {
+        to_email: to_email,
+        subject: `Your Travel Quote - ${quote.quoteNo}`,
+        body: `Hello ${
+          client?.name || "Valued Client"
+        },\n\nPlease find attached the quote ${
+          quote.quoteNo
+        } for your travel request.\n\nThank you for choosing Smart Travel Agency!`,
+        attachment_base64: pdfBase64,
+        filename: `Quote_${quote.quoteNo}.pdf`,
+      };
+
+      await sendEmail(emailData);
+      setMessage(`Quote ${quote.quoteNo} has been sent to ${to_email}.`);
+
+      // Mark as Sent if it was Draft
+      if (quote.status === "Draft") {
+        await handleStatusChange(quote.quoteNo, "Sent");
+      }
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail || err.message || "Failed to send email";
+      setError(`Mailing Error: ${detail}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -370,6 +473,23 @@ export function QuotesPage({ agencyId }) {
                         title="Download PDF"
                       >
                         PDF
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => sendQuoteEmail(quote)}
+                        title="Send by Email"
+                      >
+                        Mail
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteQuote(quote.quoteNo)}
+                        title="Delete Quote"
+                        className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        Del
                       </Button>
                       {status === "Draft" && (
                         <Button
