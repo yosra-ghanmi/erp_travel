@@ -127,6 +127,28 @@ export const fetchInvoiceLines = async (invoiceNo) => {
   return data.lines;
 };
 
+// Agency Admin
+export const createAgencyAdmin = async (agencyId, agencyName, ownerEmail) => {
+  const { data } = await api.post("/api/agency-admin", { agency_id: agencyId, agency_name: agencyName, owner_email: ownerEmail });
+  return data;
+};
+
+// Agencies
+export const fetchAgencies = async () => {
+  const { data } = await api.get("/api/agencies");
+  return data.agencies;
+};
+
+export const createAgency = async (agencyData) => {
+  const { data } = await api.post("/api/agencies", agencyData);
+  return data;
+};
+
+export const updateAgency = async (agencyId, patch) => {
+  const { data } = await api.patch(`/api/agencies/${agencyId}`, patch);
+  return data;
+};
+
 export const deleteInvoice = async (invoiceNo) => {
   const { data } = await api.delete(`/api/invoices/${invoiceNo}`);
   return data;

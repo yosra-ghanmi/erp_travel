@@ -1,0 +1,31 @@
+[
+  {
+    "id": "AG-001",
+    "name": "Atlas Voyages",
+    "logo": "/logo-atlas.png",
+    "subscription_status": "active",
+    "owner_id": "USR-1002"
+  },
+  {
+    "id": "AG-002",
+    "name": "BluePalm Travel",
+    "logo": "/logo-bluepalm.png",
+    "subscription_status": "suspended",
+    "owner_id": "USR-1004"
+  },
+  {
+    "id": "AG-003",
+    "agency_id": "AG-003",
+    "name": "test",
+    "logo": "/logo-agency.png",
+    "email": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "country": null,
+    "subscription_status": "active",
+    "owner_id": "USR-1004",
+    "created_at": "2026-04-14",
+    "is_active": true
+  }
+]

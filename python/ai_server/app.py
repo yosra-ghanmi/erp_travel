@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -34,9 +34,13 @@ from models import (
     TravelPayment,
     EmailRequest,
 )
+from agency_models import Agency, AgencyCreate, AgencyUpdate
 from ai import generate_itinerary
 from mailing import send_email_with_attachment
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
+from secure_bc_client import SecureBCClient
+from user_sync_service import AgencyAdminSyncService
+from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,6 +90,69 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "ERP-AI Integration"}
+
+
+# --- AGENCIES ---
+
+AGENCIES_FILE = os.path.join(os.path.dirname(__file__), "agencies.json")
+
+def _load_agencies() -> List[Dict]:
+    if not os.path.exists(AGENCIES_FILE):
+        return []
+    with open(AGENCIES_FILE, "r") as f:
+        return json.load(f)
+
+def _save_agencies(agencies: List[Dict]):
+    with open(AGENCIES_FILE, "w") as f:
+        json.dump(agencies, f, indent=2)
+
+@app.get("/api/agencies")
+def get_agencies():
+    try:
+        return {"agencies": _load_agencies()}
+    except Exception as e:
+        logger.error(f"Error fetching agencies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/agencies")
+def create_agency(agency: Agency):
+    try:
+        agencies = _load_agencies()
+        # Convert Pydantic model to dict, ensuring it's serializable
+        agency_dict = json.loads(agency.json())
+        if not agency_dict.get("created_at"):
+            agency_dict["created_at"] = date.today().isoformat()
+        
+        # Ensure ID is consistent
+        if not agency_dict.get("id"):
+            agency_dict["id"] = agency_dict.get("agency_id")
+            
+        agencies.append(agency_dict)
+        _save_agencies(agencies)
+        return agency_dict
+    except Exception as e:
+        logger.error(f"Error creating agency: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/agencies/{agency_id}")
+def update_agency(agency_id: str, patch: Dict):
+    try:
+        agencies = _load_agencies()
+        updated = False
+        for i, a in enumerate(agencies):
+            if a.get("id") == agency_id or a.get("agency_id") == agency_id:
+                agencies[i].update(patch)
+                updated = True
+                break
+        if not updated:
+            raise HTTPException(status_code=404, detail="Agency not found")
+        _save_agencies(agencies)
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating agency: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- CLIENTS ---
@@ -402,6 +469,34 @@ def send_email(req: EmailRequest):
             raise HTTPException(status_code=500, detail="Failed to send email. Check server logs.")
     except Exception as e:
         logger.error(f"Error in send_email endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- AGENCY ADMIN ---
+
+class AgencyAdminCreate(BaseModel):
+    agency_id: str
+    agency_name: str
+    owner_email: Optional[str] = None
+
+
+def _get_admin_bc_client():
+    return SecureBCClient(user_role="super_admin")
+
+
+@app.post("/api/agency-admin")
+def create_agency_admin(req: AgencyAdminCreate, company_name: str | None = None):
+    try:
+        admin_bc = _get_admin_bc_client()
+        agency_admin_svc = AgencyAdminSyncService(admin_bc)
+        result = agency_admin_svc.create_agency_admin(
+            agency_id=req.agency_id,
+            agency_name=req.agency_name,
+            owner_email=req.owner_email
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error creating agency admin: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

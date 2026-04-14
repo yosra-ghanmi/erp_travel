@@ -39,6 +39,10 @@ import {
   fetchReservations,
   fetchQuotes,
   fetchInvoices,
+  createAgencyAdmin,
+  fetchAgencies,
+  createAgency,
+  updateAgency,
 } from "./services/erpApi";
 
 const normalizeClient = (client) => ({
@@ -187,7 +191,17 @@ function AppWorkspace() {
   const [quotes, setQuotes] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [serviceUsage, setServiceUsage] = useState([]);
-  const [tenantAgencies, setTenantAgencies] = useState(agencies);
+  const [tenantAgencies, setTenantAgencies] = useState([]);
+
+  useEffect(() => {
+    fetchAgencies()
+      .then(setTenantAgencies)
+      .catch((err) => {
+        console.error("Failed to fetch agencies:", err);
+        // Fallback to mock if API fails
+        setTenantAgencies(agencies);
+      });
+  }, []);
   const [settings, setSettings] = useState({
     trialDays: 14,
     aiRateLimit: 120,
@@ -447,40 +461,68 @@ function AppWorkspace() {
     pushNotification(`AI itinerary converted to booking ${newBooking.id}`);
   };
 
-  const toggleAgencySubscription = (agencyIdValue) => {
+  const toggleAgencySubscription = async (agencyIdValue) => {
     let agencyNameValue = agencyIdValue;
-    setTenantAgencies((prev) =>
-      prev.map((agency) => {
-        if (agency.id !== agencyIdValue) return agency;
-        agencyNameValue = agency.name;
-        return {
-          ...agency,
-          subscription_status:
-            agency.subscription_status === "active" ? "suspended" : "active",
-        };
-      })
-    );
-    pushNotification(`Subscription updated for ${agencyNameValue}`);
+    const targetAgency = tenantAgencies.find((a) => a.id === agencyIdValue);
+    if (!targetAgency) return;
+
+    const newStatus =
+      targetAgency.subscription_status === "active" ? "suspended" : "active";
+
+    try {
+      await updateAgency(agencyIdValue, { subscription_status: newStatus });
+      setTenantAgencies((prev) =>
+        prev.map((agency) =>
+          agency.id === agencyIdValue
+            ? { ...agency, subscription_status: newStatus }
+            : agency
+        )
+      );
+      pushNotification(`Subscription updated for ${targetAgency.name}`);
+    } catch (err) {
+      pushNotification(`Failed to update subscription: ${err.message}`);
+    }
   };
 
-  const handleAddAgency = (payload) => {
-    setTenantAgencies((prev) => {
-      const next = {
-        id: `AG-${String(prev.length + 1).padStart(3, "0")}`,
-        ...payload,
-      };
-      return [...prev, next];
-    });
-    pushNotification(`Agency ${payload.name} created`);
+  const handleAddAgency = async (payload, onCreated) => {
+    const newId = `AG-${String(tenantAgencies.length + 1).padStart(3, "0")}`;
+    const newAgency = {
+      id: newId,
+      agency_id: newId, // Ensure both id and agency_id are present for compatibility
+      ...payload,
+    };
+
+    try {
+      const createdAgency = await createAgency(newAgency);
+      setTenantAgencies((prev) => [...prev, createdAgency]);
+      pushNotification(`Agency ${payload.name} created`);
+
+      const owner = users.find((u) => u.id === payload.owner_id);
+      const adminData = await createAgencyAdmin(
+        newId,
+        payload.name,
+        owner?.email
+      );
+      if (onCreated) {
+        onCreated({ agency_name: payload.name, ...adminData });
+      }
+    } catch (err) {
+      pushNotification(`Failed to create agency: ${err.message}`);
+    }
   };
 
-  const editAgency = (agencyIdValue, patch) => {
-    setTenantAgencies((prev) =>
-      prev.map((agency) =>
-        agency.id === agencyIdValue ? { ...agency, ...patch } : agency
-      )
-    );
-    pushNotification(`Agency ${agencyIdValue} updated`);
+  const editAgency = async (agencyIdValue, patch) => {
+    try {
+      await updateAgency(agencyIdValue, patch);
+      setTenantAgencies((prev) =>
+        prev.map((agency) =>
+          agency.id === agencyIdValue ? { ...agency, ...patch } : agency
+        )
+      );
+      pushNotification(`Agency ${agencyIdValue} updated`);
+    } catch (err) {
+      pushNotification(`Failed to update agency: ${err.message}`);
+    }
   };
 
   const impersonateAsAgency = (targetAgencyId) => {
