@@ -43,6 +43,7 @@ import {
   fetchAgencies,
   createAgency,
   updateAgency,
+  deleteAgency,
 } from "./services/erpApi";
 
 const normalizeClient = (client) => ({
@@ -405,7 +406,7 @@ function AppWorkspace() {
 
   const scopeByAgency = (rows) => {
     if (!rows || !Array.isArray(rows)) return [];
-    if (role === "super_admin") return rows;
+    if (role === "superadmin") return rows;
     const hasAgencyScopedRows = rows.some((row) => row?.agency_id);
     if (!hasAgencyScopedRows) return rows;
     return rows.filter((row) => row.agency_id === agencyId);
@@ -486,28 +487,44 @@ function AppWorkspace() {
 
   const handleAddAgency = async (payload, onCreated) => {
     const newId = `AG-${String(tenantAgencies.length + 1).padStart(3, "0")}`;
-    const newAgency = {
-      id: newId,
-      agency_id: newId, // Ensure both id and agency_id are present for compatibility
-      ...payload,
-    };
 
     try {
-      const createdAgency = await createAgency(newAgency);
-      setTenantAgencies((prev) => [...prev, createdAgency]);
-      pushNotification(`Agency ${payload.name} created`);
-
-      const owner = users.find((u) => u.id === payload.owner_id);
+      // 1. Create the admin first so we have the real owner ID
+      const selectedOwner = users.find((u) => u.id === payload.owner_id);
       const adminData = await createAgencyAdmin(
         newId,
         payload.name,
-        owner?.email
+        selectedOwner?.email
       );
+
+      // 2. Add the new admin to the frontend users state
+      const newUser = {
+        id: adminData.user_id,
+        name: adminData.name,
+        email: adminData.email,
+        password: adminData.password,
+        role: adminData.role,
+        agency_id: adminData.agency_id,
+      };
+      setUsers((prev) => [...prev, newUser]);
+
+      // 3. Create the agency with the real owner ID
+      const newAgency = {
+        id: newId,
+        agency_id: newId,
+        ...payload,
+        owner_id: adminData.user_id, // Use the generated admin ID as the owner
+      };
+
+      const createdAgency = await createAgency(newAgency);
+      setTenantAgencies((prev) => [...prev, createdAgency]);
+      pushNotification(`Agency ${payload.name} created with new admin`);
+
       if (onCreated) {
         onCreated({ agency_name: payload.name, ...adminData });
       }
     } catch (err) {
-      pushNotification(`Failed to create agency: ${err.message}`);
+      pushNotification(`Failed to create agency or admin: ${err.message}`);
     }
   };
 
@@ -522,6 +539,25 @@ function AppWorkspace() {
       pushNotification(`Agency ${agencyIdValue} updated`);
     } catch (err) {
       pushNotification(`Failed to update agency: ${err.message}`);
+    }
+  };
+
+  const removeAgency = async (agencyIdValue) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this agency? This action cannot be undone."
+      )
+    )
+      return;
+
+    try {
+      await deleteAgency(agencyIdValue);
+      setTenantAgencies((prev) =>
+        prev.filter((agency) => agency.id !== agencyIdValue)
+      );
+      pushNotification(`Agency ${agencyIdValue} deleted`);
+    } catch (err) {
+      pushNotification(`Failed to delete agency: ${err.message}`);
     }
   };
 
@@ -555,6 +591,7 @@ function AppWorkspace() {
           onToggleSubscription={toggleAgencySubscription}
           onAddAgency={handleAddAgency}
           onEditAgency={editAgency}
+          onDeleteAgency={removeAgency}
           onImpersonate={impersonateAsAgency}
         />
       );
@@ -640,7 +677,7 @@ function AppWorkspace() {
       );
     }
     if (resolvedModuleKey === "travel_offers") {
-      return <TravelOffersPage />;
+      return <TravelOffersPage role={role} />;
     }
     return (
       <DashboardPage

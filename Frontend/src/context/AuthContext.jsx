@@ -1,12 +1,10 @@
 import { useState, useEffect } from "react";
 import { users as seedUsers } from "../data/mockData";
 import { AuthContext, permissionsMap } from "./authCore";
+import { fetchUsers } from "../services/erpApi";
 
 export function AuthProvider({ children }) {
-  const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem("erp_users");
-    return saved ? JSON.parse(saved) : seedUsers;
-  });
+  const [users, setUsers] = useState(seedUsers);
 
   const [sessionUser, setSessionUser] = useState(() => {
     const saved = localStorage.getItem("erp_session");
@@ -14,8 +12,10 @@ export function AuthProvider({ children }) {
   });
 
   useEffect(() => {
-    localStorage.setItem("erp_users", JSON.stringify(users));
-  }, [users]);
+    fetchUsers()
+      .then(setUsers)
+      .catch((err) => console.error("Failed to fetch users:", err));
+  }, []);
 
   useEffect(() => {
     if (sessionUser) {
@@ -60,7 +60,7 @@ export function AuthProvider({ children }) {
 
   const impersonateAgency = (agencyId) => {
     const agencyAdmin = users.find(
-      (user) => user.role === "agency_admin" && user.agency_id === agencyId
+      (user) => user.role === "admin" && user.agency_id === agencyId
     );
     if (!agencyAdmin) return null;
     setSessionUser(agencyAdmin);

@@ -101,7 +101,7 @@ export function Layout({
               ))}
             </nav>
           </div>
-          {role === "super_admin" ? (
+          {role === "superadmin" ? (
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {t("account.powered_by")}
             </p>

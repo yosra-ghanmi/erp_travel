@@ -1,0 +1,66 @@
+[
+  {
+    "id": "USR-1001",
+    "name": "Platform Owner",
+    "email": "super@navigo.com",
+    "password": "123456",
+    "role": "superadmin",
+    "agency_id": null
+  },
+  {
+    "id": "USR-1002",
+    "name": "Amina Atlas",
+    "email": "admin@navigo.com",
+    "password": "123456",
+    "role": "admin",
+    "agency_id": "AG-001"
+  },
+  {
+    "id": "USR-1003",
+    "name": "Rayan Agent",
+    "email": "agent@navigo.com",
+    "password": "123456",
+    "role": "agent",
+    "agency_id": "AG-001"
+  },
+  {
+    "id": "USR-1006",
+    "name": "Salma Finance",
+    "email": "finance@navigo.com",
+    "password": "123456",
+    "role": "finance",
+    "agency_id": "AG-001"
+  },
+  {
+    "id": "USR-1004",
+    "name": "Sofia BluePalm",
+    "email": "admin@navigo.com",
+    "password": "123456",
+    "role": "admin",
+    "agency_id": "AG-002"
+  },
+  {
+    "id": "USR-1005",
+    "name": "Ilyes Seller",
+    "email": "agent@navigo.com",
+    "password": "123456",
+    "role": "agent",
+    "agency_id": "AG-002"
+  },
+  {
+    "id": "ADM-AG-004",
+    "name": "Admin for travel2do",
+    "email": "admin.ag_003@system.local",
+    "password": "!Dhpvnl8cJ2P",
+    "role": "admin",
+    "agency_id": "AG-004"
+  },
+  {
+    "id": "ADM-AG-003",
+    "name": "Admin for Atlas Voyages",
+    "email": "admin@navigo.com",
+    "password": "GDSaMue%%J9R",
+    "role": "admin",
+    "agency_id": "AG-003"
+  }
+]

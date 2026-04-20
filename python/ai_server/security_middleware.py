@@ -135,8 +135,8 @@ async def get_agency_context(
         role = request.query_params.get("user_role", "agent")
 
     role = role.lower()
-    is_super_admin = (role == "super_admin")
-    is_privileged_role = role in ("super_admin", "finance")
+    is_super_admin = (role == "superadmin")
+    is_privileged_role = role in ("superadmin", "finance")
 
     # Security: Non-privileged users MUST have an agency_id
     if not is_privileged_role and not agency_id:

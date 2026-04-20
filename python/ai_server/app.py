@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 from datetime import date
 from typing import List, Optional, Dict
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +38,7 @@ from agency_models import Agency, AgencyCreate, AgencyUpdate
 from ai import generate_itinerary
 from mailing import send_email_with_attachment
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
-from secure_bc_client import SecureBCClient
+from secure_bc_client import SecureBCClient, get_secure_bc_client
 from user_sync_service import AgencyAdminSyncService
 from pydantic import BaseModel
 
@@ -95,6 +95,8 @@ def health_check():
 # --- AGENCIES ---
 
 AGENCIES_FILE = os.path.join(os.path.dirname(__file__), "agencies.json")
+USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+OFFERS_FILE = os.path.join(os.path.dirname(__file__), "travel_offers.json")
 
 def _load_agencies() -> List[Dict]:
     if not os.path.exists(AGENCIES_FILE):
@@ -105,6 +107,34 @@ def _load_agencies() -> List[Dict]:
 def _save_agencies(agencies: List[Dict]):
     with open(AGENCIES_FILE, "w") as f:
         json.dump(agencies, f, indent=2)
+
+def _load_users() -> List[Dict]:
+    if not os.path.exists(USERS_FILE):
+        return []
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
+
+def _save_users(users: List[Dict]):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f, indent=2)
+
+def _load_offers() -> List[Dict]:
+    if not os.path.exists(OFFERS_FILE):
+        return []
+    with open(OFFERS_FILE, "r") as f:
+        return json.load(f)
+
+def _save_offers(offers: List[Dict]):
+    with open(OFFERS_FILE, "w") as f:
+        json.dump(offers, f, indent=2)
+
+@app.get("/api/users")
+def get_users():
+    try:
+        return {"users": _load_users()}
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/agencies")
 def get_agencies():
@@ -154,14 +184,31 @@ def update_agency(agency_id: str, patch: Dict):
         logger.error(f"Error updating agency: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/agencies/{agency_id}")
+def delete_agency(agency_id: str):
+    try:
+        agencies = _load_agencies()
+        original_count = len(agencies)
+        agencies = [a for a in agencies if a.get("id") != agency_id and a.get("agency_id") != agency_id]
+        
+        if len(agencies) == original_count:
+            raise HTTPException(status_code=404, detail="Agency not found")
+            
+        _save_agencies(agencies)
+        return {"status": "success", "message": f"Agency {agency_id} deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting agency: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- CLIENTS ---
 
 @app.get("/api/clients")
-def get_clients(company_name: str | None = None):
+def get_clients(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        clients = bc.travel_clients()
+        clients = client.secure_get("clients")
         return {"clients": clients}
     except Exception as e:
         logger.error(f"Error fetching clients: {e}")
@@ -169,19 +216,18 @@ def get_clients(company_name: str | None = None):
 
 
 @app.post("/api/clients")
-def create_client(client: ClientCreate, company_name: str | None = None):
+def create_client(client_data: ClientCreate, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         client_no = f"CL-{int(time.time())}"
         payload = {
             "no": client_no,
-            "name": client.name,
-            "email": client.email,
-            "phone": client.phone,
-            "country": client.country,
-            "notes": client.notes
+            "name": client_data.name,
+            "email": client_data.email,
+            "phone": client_data.phone,
+            "country": client_data.country,
+            "notes": client_data.notes
         }
-        return bc.create_travel_client(payload)
+        return client.secure_post("clients", payload)
     except Exception as e:
         logger.error(f"Error creating client in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -190,10 +236,9 @@ def create_client(client: ClientCreate, company_name: str | None = None):
 # --- BOOKINGS ---
 
 @app.get("/api/bookings")
-def get_bookings(company_name: str | None = None):
+def get_bookings(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        bookings = bc.travel_bookings()
+        bookings = client.secure_get("bookings")
         return {"bookings": bookings}
     except Exception as e:
         logger.error(f"Error fetching bookings: {e}")
@@ -201,9 +246,8 @@ def get_bookings(company_name: str | None = None):
 
 
 @app.post("/api/bookings")
-def create_booking(booking: BookingCreate, company_name: str | None = None):
+def create_booking(booking: BookingCreate, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         booking_id = f"BK-{int(time.time())}"
         payload = {
             "bookingId": booking_id,
@@ -214,7 +258,7 @@ def create_booking(booking: BookingCreate, company_name: str | None = None):
             "amount": booking.amount,
             "notes": booking.notes
         }
-        return bc.create_travel_booking(payload)
+        return client.secure_create("bookings", payload)
     except Exception as e:
         logger.error(f"Error creating booking in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -223,10 +267,9 @@ def create_booking(booking: BookingCreate, company_name: str | None = None):
 # --- PAYMENTS ---
 
 @app.get("/api/payments")
-def get_payments(company_name: str | None = None):
+def get_payments(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        payments = bc.travel_payments()
+        payments = client.secure_get("payments")
         return {"payments": payments}
     except Exception as e:
         logger.error(f"Error fetching payments: {e}")
@@ -234,11 +277,12 @@ def get_payments(company_name: str | None = None):
 
 
 @app.post("/api/payments")
-def create_payment(payment: TravelPayment, company_name: str | None = None):
+def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         payload = json.loads(payment.json(by_alias=True, exclude_none=True))
-        return bc.create_travel_payment(payload)
+        if not payload.get("paymentId"):
+            payload["paymentId"] = f"PAY-{int(time.time())}"
+        return client.secure_create("payments", payload)
     except Exception as e:
         logger.error(f"Error creating payment in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -247,10 +291,9 @@ def create_payment(payment: TravelPayment, company_name: str | None = None):
 # --- EXPENSES ---
 
 @app.get("/api/expenses")
-def get_expenses(company_name: str | None = None):
+def get_expenses(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        expenses = bc.travel_expenses()
+        expenses = client.secure_get("expenses")
         return {"expenses": expenses}
     except Exception as e:
         logger.error(f"Error fetching expenses: {e}")
@@ -258,9 +301,8 @@ def get_expenses(company_name: str | None = None):
 
 
 @app.post("/api/expenses")
-def create_expense(expense: ExpenseCreate, company_name: str | None = None):
+def create_expense(expense: ExpenseCreate, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         expense_id = f"EXP-{int(time.time())}"
         payload = {
             "expenseId": expense_id,
@@ -269,7 +311,7 @@ def create_expense(expense: ExpenseCreate, company_name: str | None = None):
             "date": expense.date.isoformat(),
             "description": expense.description
         }
-        return bc.create_travel_expense(payload)
+        return client.secure_create("expenses", payload)
     except Exception as e:
         logger.error(f"Error creating expense in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -278,10 +320,9 @@ def create_expense(expense: ExpenseCreate, company_name: str | None = None):
 # --- SERVICES ---
 
 @app.get("/api/services")
-def get_services(company_name: str | None = None):
+def get_services(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        services = bc.travel_services()
+        services = client.secure_get("services")
         return {"services": services}
     except Exception as e:
         logger.error(f"Error fetching services: {e}")
@@ -289,23 +330,21 @@ def get_services(company_name: str | None = None):
 
 
 @app.post("/api/services")
-def create_service(service: TravelService, company_name: str | None = None):
+def create_service(service: TravelService, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         payload = service.dict(by_alias=True, exclude_none=True)
         if not payload.get("code"):
             payload["code"] = f"SV-{int(time.time())}"
-        return bc.create_travel_service(payload)
+        return client.secure_create("services", payload)
     except Exception as e:
         logger.error(f"Error creating service in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/api/services/{service_code}")
-def delete_service(service_code: str, company_name: str | None = None):
+def delete_service(service_code: str, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        bc.delete_travel_service(service_code)
+        client.secure_delete("services", service_code)
         return {"status": "success", "message": f"Service {service_code} deleted"}
     except Exception as e:
         logger.error(f"Error deleting service in BC: {e}")
@@ -315,10 +354,9 @@ def delete_service(service_code: str, company_name: str | None = None):
 # --- RESERVATIONS ---
 
 @app.get("/api/reservations")
-def get_reservations(company_name: str | None = None):
+def get_reservations(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        reservations = bc.travel_reservations()
+        reservations = client.secure_get("reservations")
         return {"reservations": reservations}
     except Exception as e:
         logger.error(f"Error fetching reservations: {e}")
@@ -326,13 +364,12 @@ def get_reservations(company_name: str | None = None):
 
 
 @app.post("/api/reservations")
-def create_reservation(reservation: Reservation, company_name: str | None = None):
+def create_reservation(reservation: Reservation, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         payload = reservation.dict(by_alias=True, exclude_none=True)
         if not payload.get("reservationNo"):
             payload["reservationNo"] = f"RES-{int(time.time())}"
-        return bc.create_travel_reservation(payload)
+        return client.secure_create("reservations", payload)
     except Exception as e:
         logger.error(f"Error creating reservation in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -341,10 +378,9 @@ def create_reservation(reservation: Reservation, company_name: str | None = None
 # --- QUOTES ---
 
 @app.get("/api/quotes")
-def get_quotes(company_name: str | None = None):
+def get_quotes(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        quotes = bc.travel_quotes()
+        quotes = client.secure_get("quotes")
         return {"quotes": quotes}
     except Exception as e:
         logger.error(f"Error fetching quotes: {e}")
@@ -352,40 +388,72 @@ def get_quotes(company_name: str | None = None):
 
 
 @app.post("/api/quotes")
-def create_quote(quote: TravelQuote, company_name: str | None = None):
+def create_quote(quote: TravelQuote, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        # Use .json() to ensure dates and other objects are serialized to strings, 
-        # then loads() back to dict for the bc_client which uses requests(json=...)
         payload = json.loads(quote.json(by_alias=True, exclude_none=True))
-        # Clean empty strings
-        payload = {k: v for k, v in payload.items() if v != ""}
         
-        if not payload.get("quoteNo"):
-            payload["quoteNo"] = f"QT-{int(time.time())}"
-        return bc.create_travel_quote(payload)
+        service_items = payload.get("serviceItems", [])
+        service_codes = payload.get("serviceCodes", [])
+        
+        # 1. Handle first service (Header mapping)
+        if service_items:
+            payload["serviceCode"] = service_items[0]["serviceCode"]
+            payload["quantity"] = service_items[0].get("quantity", 1)
+            payload["numberOfNights"] = service_items[0].get("numberOfNights", 1)
+        elif service_codes:
+            payload["serviceCode"] = service_codes[0]
+            payload["quantity"] = 1
+            payload["numberOfNights"] = 1
+            
+        # Clean payload for Header creation
+        header_payload = {k: v for k, v in payload.items() if k not in ["serviceItems", "serviceCodes"]}
+        header_payload = {k: v for k, v in header_payload.items() if v != "" and v != []}
+        
+        if not header_payload.get("quoteNo"):
+            header_payload["quoteNo"] = f"QT-{int(time.time())}"
+            
+        # 2. Create Header (triggers first line in BC)
+        result = client.secure_create("quotes", header_payload)
+        quote_no = result.get("quoteno")
+        
+        # 3. Create additional lines if multiple items provided
+        if len(service_items) > 1:
+            for i, item in enumerate(service_items[1:]):
+                line_payload = {
+                    "quoteNo": quote_no,
+                    "lineNo": (i + 2) * 10000,
+                    "serviceCode": item["serviceCode"],
+                    "quantity": item.get("quantity", 1),
+                    "numberOfNights": item.get("numberOfNights", 1)
+                }
+                try:
+                    client.secure_create("quote_lines", line_payload)
+                except Exception as line_err:
+                    logger.warning(f"Failed to create additional line for {item['serviceCode']}: {line_err}")
+                    
+        return result
     except Exception as e:
         logger.error(f"Error creating quote in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.patch("/api/quotes/{quote_no}")
-def update_quote(quote_no: str, quote: TravelQuote, company_name: str | None = None):
+def update_quote(quote_no: str, quote: TravelQuote, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         payload = json.loads(quote.json(by_alias=True, exclude_none=True))
         logger.info(f"Updating quote {quote_no} with payload: {payload}")
-        return bc.update_travel_quote(quote_no, payload)
+        return client.secure_update("quotes", quote_no, payload)
     except Exception as e:
         logger.error(f"Error updating quote in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/quotes/{quote_no}/lines")
-def get_quote_lines(quote_no: str, company_name: str | None = None):
+def get_quote_lines(quote_no: str, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        lines = bc.travel_quote_lines(quote_no)
+        # Fetch lines filtered by quoteNo and agency
+        filters = [f"quoteNo eq '{quote_no}'"]
+        lines = client.secure_get("quote_lines", filters=filters)
         return {"lines": lines}
     except Exception as e:
         logger.error(f"Error fetching quote lines: {e}")
@@ -393,10 +461,9 @@ def get_quote_lines(quote_no: str, company_name: str | None = None):
 
 
 @app.delete("/api/quotes/{quote_no}")
-def delete_quote(quote_no: str, company_name: str | None = None):
+def delete_quote(quote_no: str, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        bc.delete_travel_quote(quote_no)
+        client.secure_delete("quotes", quote_no)
         return {"status": "success", "message": f"Quote {quote_no} deleted"}
     except Exception as e:
         logger.error(f"Error deleting quote in BC: {e}")
@@ -406,10 +473,9 @@ def delete_quote(quote_no: str, company_name: str | None = None):
 # --- INVOICES ---
 
 @app.get("/api/invoices")
-def get_invoices(company_name: str | None = None):
+def get_invoices(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        invoices = bc.travel_invoices()
+        invoices = client.secure_get("invoices")
         return {"invoices": invoices}
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}")
@@ -417,23 +483,23 @@ def get_invoices(company_name: str | None = None):
 
 
 @app.post("/api/invoices")
-def create_invoice(invoice: TravelInvoice, company_name: str | None = None):
+def create_invoice(invoice: TravelInvoice, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
         payload = json.loads(invoice.json(by_alias=True, exclude_none=True))
         if not payload.get("invoiceNo"):
             payload["invoiceNo"] = f"INV-{int(time.time())}"
-        return bc.create_travel_invoice(payload)
+        return client.secure_create("invoices", payload)
     except Exception as e:
         logger.error(f"Error creating invoice in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/invoices/{invoice_no}/lines")
-def get_invoice_lines(invoice_no: str, company_name: str | None = None):
+def get_invoice_lines(invoice_no: str, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        lines = bc.travel_invoice_lines(invoice_no)
+        # Fetch lines filtered by invoiceNo and agency
+        filters = [f"invoiceNo eq '{invoice_no}'"]
+        lines = client.secure_get("invoice_lines", filters=filters)
         return {"lines": lines}
     except Exception as e:
         logger.error(f"Error fetching invoice lines: {e}")
@@ -441,10 +507,9 @@ def get_invoice_lines(invoice_no: str, company_name: str | None = None):
 
 
 @app.delete("/api/invoices/{invoice_no}")
-def delete_invoice(invoice_no: str, company_name: str | None = None):
+def delete_invoice(invoice_no: str, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        bc = BCClient(company_name=company_name)
-        bc.delete_travel_invoice(invoice_no)
+        client.secure_delete("invoices", invoice_no)
         return {"status": "success", "message": f"Invoice {invoice_no} deleted"}
     except Exception as e:
         logger.error(f"Error deleting invoice in BC: {e}")
@@ -481,22 +546,72 @@ class AgencyAdminCreate(BaseModel):
 
 
 def _get_admin_bc_client():
-    return SecureBCClient(user_role="super_admin")
+    return SecureBCClient(user_role="superadmin")
 
 
 @app.post("/api/agency-admin")
 def create_agency_admin(req: AgencyAdminCreate, company_name: str | None = None):
     try:
-        admin_bc = _get_admin_bc_client()
-        agency_admin_svc = AgencyAdminSyncService(admin_bc)
-        result = agency_admin_svc.create_agency_admin(
-            agency_id=req.agency_id,
-            agency_name=req.agency_name,
-            owner_email=req.owner_email
-        )
+        # 1. Generate the local user data first
+        # This ensures the platform works even if Business Central is down
+        admin_id = f"ADM-{req.agency_id}"
+        admin_name = f"Admin for {req.agency_name}"
+        admin_email = req.owner_email or f"admin.{req.agency_id.lower().replace('-', '_')}@system.local"
+        
+        # We need a temp password for the local user
+        # We'll borrow the logic from the service or just generate one here
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits + "!@#$%"
+        temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+
+        result = {
+            "user_id": admin_id,
+            "name": admin_name,
+            "email": admin_email,
+            "password": temp_password,
+            "role": "admin",
+            "agency_id": req.agency_id,
+            "is_agency_admin": True,
+            "bc_sync_status": "pending"
+        }
+
+        # 2. Try to sync with Business Central (optional)
+        try:
+            admin_bc = _get_admin_bc_client()
+            agency_admin_svc = AgencyAdminSyncService(admin_bc)
+            bc_result = agency_admin_svc.create_agency_admin(
+                agency_id=req.agency_id,
+                agency_name=req.agency_name,
+                owner_email=req.owner_email
+            )
+            # Update with BC data if successful
+            result.update(bc_result)
+            result["bc_sync_status"] = "success"
+        except Exception as bc_err:
+            logger.warning(f"Business Central sync failed for {req.agency_id}: {bc_err}")
+            result["bc_sync_status"] = "failed"
+            result["bc_error"] = str(bc_err)
+        
+        # 3. Persist the user locally
+        users = _load_users()
+        new_user = {
+            "id": result["user_id"],
+            "name": result["name"],
+            "email": result["email"],
+            "password": result["password"],
+            "role": result["role"],
+            "agency_id": result["agency_id"]
+        }
+        
+        # Avoid duplicates
+        users = [u for u in users if u["id"] != new_user["id"]]
+        users.append(new_user)
+        _save_users(users)
+        
         return result
     except Exception as e:
-        logger.error(f"Error creating agency admin: {e}")
+        logger.error(f"Error in create_agency_admin: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -515,6 +630,11 @@ def generate(req: GenerateRequest):
 
 @app.get("/api/sync-offers", response_model=SyncOffersResponse)
 def sync_offers():
+    # 1. Load local offers first
+    local_offers = _load_offers()
+    offers = [TravelOffer(**o) for o in local_offers]
+
+    # 2. Try to sync with Business Central
     tenant_id = os.getenv("AZURE_TENANT_ID", "")
     client_id = os.getenv("AZURE_CLIENT_ID", "")
     client_secret = os.getenv("AZURE_CLIENT_SECRET", "")
@@ -523,25 +643,56 @@ def sync_offers():
     company_name = os.getenv("BC_COMPANY_NAME", "smart travel agency")
     endpoint = os.getenv("BC_TRAVEL_OFFERS_ENDPOINT", "TravelOfferAPI")
     
-    if not tenant_id or not client_id or not client_secret or not base_url:
-        # Fallback for demo if no OAuth config
-        return SyncOffersResponse(offers=[])
+    if tenant_id and client_id and client_secret and base_url:
+        try:
+            token = get_azure_ad_token(tenant_id, client_id, client_secret, scope)
+            raw_offers = fetch_travel_offers(token, base_url, company_name, endpoint)
+            for raw in raw_offers:
+                offers.append(TravelOffer(
+                    id=str(raw.get("id") or raw.get("no")),
+                    title=raw.get("title") or "Travel Offer",
+                    destination=raw.get("destination"),
+                    summary=raw.get("summary"),
+                    duration_days=raw.get("durationDays"),
+                    price=raw.get("price"),
+                    currency=raw.get("currencyCode"),
+                    highlights=[]
+                ))
+        except Exception as e:
+            logger.warning(f"Failed to sync with Business Central: {e}")
 
-    token = get_azure_ad_token(tenant_id, client_id, client_secret, scope)
-    raw_offers = fetch_travel_offers(token, base_url, company_name, endpoint)
-    offers = []
-    for raw in raw_offers:
-        offers.append(TravelOffer(
-            id=str(raw.get("id") or raw.get("no")),
-            title=raw.get("title") or "Travel Offer",
-            destination=raw.get("destination"),
-            summary=raw.get("summary"),
-            duration_days=raw.get("durationDays"),
-            price=raw.get("price"),
-            currency=raw.get("currencyCode"),
-            highlights=[]
-        ))
     return SyncOffersResponse(offers=offers)
+
+@app.post("/api/travel-offers")
+def create_travel_offer(offer: TravelOffer):
+    try:
+        offers = _load_offers()
+        new_offer = json.loads(offer.json())
+        offers.append(new_offer)
+        _save_offers(offers)
+        return new_offer
+    except Exception as e:
+        logger.error(f"Error creating travel offer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/travel-offers/{offer_id}")
+def delete_travel_offer(offer_id: str):
+    try:
+        offers = _load_offers()
+        original_count = len(offers)
+        offers = [o for o in offers if str(o.get("id")) != offer_id]
+        
+        if len(offers) == original_count:
+            # Maybe it's not a local offer, but we can't delete BC offers easily
+            raise HTTPException(status_code=404, detail="Local travel offer not found")
+            
+        _save_offers(offers)
+        return {"status": "success", "message": f"Travel offer {offer_id} deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting travel offer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/generate-itinerary", response_model=PremiumItineraryResponse)

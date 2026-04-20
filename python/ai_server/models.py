@@ -147,9 +147,16 @@ class GenerateResponse(BaseModel):
         populate_by_name = True
 
 
+class ServiceItem(BaseModel):
+    service_code: str = Field(..., alias="serviceCode")
+    quantity: float = Field(1.0)
+    number_of_nights: Optional[float] = Field(None, alias="numberOfNights")
+
 class TravelQuote(BaseModel):
     quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
     service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
+    quantity: Optional[float] = Field(None, description="Quantity (Number of Persons)")
+    number_of_nights: Optional[float] = Field(None, alias="numberOfNights", description="Number of nights (for hotels)")
     client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
     client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
     quote_date: Optional[date] = Field(None, alias="quoteDate", description="Quote date")
@@ -163,6 +170,7 @@ class TravelQuote(BaseModel):
     ai_summary: Optional[str] = Field(None, alias="aiSummary", description="AI itinerary summary")
     # Added for multiple services support
     service_codes: Optional[List[str]] = Field(None, alias="serviceCodes", description="List of service codes")
+    service_items: Optional[List[ServiceItem]] = Field(None, alias="serviceItems", description="List of service items with quantities")
 
     class Config:
         populate_by_name = True

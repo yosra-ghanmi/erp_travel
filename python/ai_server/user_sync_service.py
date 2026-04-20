@@ -8,7 +8,7 @@ Mapping:
 - user.id -> Employee.No
 - user.name -> Employee.First_Name / Last_Name
 - user.role -> Employee.Job_Title
-- user.agency_id -> Employee.Global_Dimension_1_Code
+- user.agency_id -> Employee.Agency_Code
 - user.email -> Employee.Company_Email
 """
 
@@ -46,15 +46,15 @@ class UserSyncService:
         last_name = names[1] if len(names) > 1 else ""
 
         # Map role and agency for isolation/reporting
-        # We use Job_Title for role and Global_Dimension_1_Code for agency isolation
+        # We use jobTitle for role and agency_code for agency isolation
         employee_payload = {
-            "No": user_id,
-            "First_Name": first_name,
-            "Last_Name": last_name,
-            "Job_Title": user_data.get("role", "agent"),
-            "Global_Dimension_1_Code": user_data.get("agency_id", ""),
-            "Company_Email": user_data.get("email", ""),
-            "Status": "Active"
+            "no": user_id,
+            "firstName": first_name,
+            "lastName": last_name,
+            "jobTitle": user_data.get("role", "agent"),
+            "agency_code": user_data.get("agency_id", ""),
+            "companyEmail": user_data.get("email", ""),
+            "status": "Active"
         }
 
         logger.info(f"Syncing user {user_id} ({full_name}) to BC as Employee")
@@ -142,13 +142,13 @@ class AgencyAdminSyncService:
         temp_password = self._generate_temp_password()
 
         admin_payload = {
-            "No": admin_id,
-            "First_Name": f"Agency",
-            "Last_Name": f"Admin",
-            "Job_Title": "agency_admin",
-            "Global_Dimension_1_Code": agency_id,
-            "Company_Email": admin_email,
-            "Status": "Active"
+            "no": admin_id,
+            "firstName": f"Agency",
+            "lastName": f"Admin",
+            "jobTitle": "admin",
+            "agency_code": agency_id,
+            "companyEmail": admin_email,
+            "status": "Active"
         }
 
         logger.info(f"Creating agency admin {admin_id} for agency {agency_id}")
@@ -176,7 +176,7 @@ class AgencyAdminSyncService:
                 "name": admin_name,
                 "email": admin_email,
                 "password": temp_password,
-                "role": "agency_admin",
+                "role": "admin",
                 "agency_id": agency_id,
                 "is_agency_admin": True,
                 "bc_employee": result
@@ -202,13 +202,13 @@ class AgencyAdminSyncService:
         for i in range(1, count + 1):
             agent_id = f"AGT-{agency_id}-{i:03d}"
             agent_payload = {
-                "No": agent_id,
-                "First_Name": f"Agent",
-                "Last_Name": f"#{i}",
-                "Job_Title": "agent",
-                "Global_Dimension_1_Code": agency_id,
-                "Company_Email": f"agent{i}@{agency_id.lower().replace('-', '')}.local",
-                "Status": "Active"
+                "no": agent_id,
+                "firstName": f"Agent",
+                "lastName": f"#{i}",
+                "jobTitle": "agent",
+                "agency_code": agency_id,
+                "companyEmail": f"agent{i}@{agency_id.lower().replace('-', '')}.local",
+                "status": "Active"
             }
 
             try:

@@ -25,6 +25,8 @@ const initialForm = {
   clientNo: "",
   serviceCode: "",
   serviceCodes: [], // For multiple services
+  quantity: 1, // Number of Persons
+  numberOfNights: 1, // Number of Nights
   discount_percent: 0,
   // Environment Note: Business Central license restricts dates to specific months (Nov, Dec, Jan, Feb)
   quoteDate: "2026-01-15",
@@ -136,10 +138,15 @@ export function QuotesPage({ agencyId }) {
     setError("");
     setMessage("");
     try {
-      // If multiple services are selected, we pass them as serviceCodes
+      // If multiple services are selected, we pass them as serviceItems
       const quoteData = { ...form };
       if (form.serviceCodes.length > 0) {
         quoteData.serviceCode = ""; // Clear singular if multiple are used
+        quoteData.serviceItems = form.serviceCodes.map((code) => ({
+          serviceCode: code,
+          quantity: form.quantity,
+          numberOfNights: form.numberOfNights,
+        }));
       }
 
       const result = await createQuote(quoteData);
@@ -275,24 +282,44 @@ export function QuotesPage({ agencyId }) {
     // Services Table
     const tableRows =
       lines.length > 0
-        ? lines.map((line) => [
-            line.servicename ||
-              line.service_name ||
-              line.description ||
-              line.servicecode ||
-              "Travel Service",
-            line.quantity || 1,
-            `${line.unitprice || line.unit_price || 0} ${
-              quote.currencyCode || "USD"
-            }`,
-            `${line.lineamount || line.line_amount || 0} ${
-              quote.currencyCode || "USD"
-            }`,
-          ])
+        ? lines.map((line) => {
+            const isHotel =
+              line.servicetype === "Hotel" ||
+              line.service_type === "Hotel" ||
+              line.serviceType === "Hotel";
+            return [
+              line.servicename ||
+                line.service_name ||
+                line.description ||
+                line.servicecode ||
+                "Travel Service",
+              line.numberofnights || line.numberOfNights || 1,
+              line.quantity || 1,
+              `${line.unitprice || line.unit_price || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+              `${line.pricepernighttotal || line.pricePerNightTotal || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+              `${line.priceperpersontotal || line.pricePerPersonTotal || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+              `${line.lineamount || line.line_amount || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+            ];
+          })
         : [
             [
               quote.serviceCode || "Travel Services",
               1,
+              1,
+              `${quote.subtotal || quote.totalAmount || 0} ${
+                quote.currencyCode || "USD"
+              }`,
+              `${quote.subtotal || quote.totalAmount || 0} ${
+                quote.currencyCode || "USD"
+              }`,
               `${quote.subtotal || quote.totalAmount || 0} ${
                 quote.currencyCode || "USD"
               }`,
@@ -304,7 +331,17 @@ export function QuotesPage({ agencyId }) {
 
     autoTable(doc, {
       startY: 85,
-      head: [["Service Description", "Qty", "Unit Price", "Total"]],
+      head: [
+        [
+          "Service Description",
+          "Nights",
+          "Pers.",
+          "Price/Night/Pers",
+          "Price/Night (All)",
+          "Price/Person (Total)",
+          "Total",
+        ],
+      ],
       body: tableRows,
       theme: "striped",
       headStyles: { fillColor: [41, 128, 185] },
@@ -599,6 +636,41 @@ export function QuotesPage({ agencyId }) {
           <p className="text-[9px] text-slate-400 italic">
             Hold Ctrl/Cmd to select multiple
           </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-slate-400">
+                Persons
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={form.quantity}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    quantity: Number(e.target.value),
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-slate-400">
+                Nights
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={form.numberOfNights}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    numberOfNights: Number(e.target.value),
+                  }))
+                }
+              />
+            </div>
+          </div>
 
           <label className="text-[10px] uppercase font-bold text-slate-400">
             Discount

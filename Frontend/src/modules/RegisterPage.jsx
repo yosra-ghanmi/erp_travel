@@ -11,7 +11,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export function RegisterPage() {
   const { register } = useAuth()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: '', email: '', password: '', agency_id: agencies[0]?.id ?? '', role: 'agency_admin' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', agency_id: agencies[0]?.id ?? '', role: 'admin' })
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -142,7 +142,7 @@ export function RegisterPage() {
                       onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
                       className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-4 pr-9 text-sm outline-none transition-all duration-300 ease-in-out focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950"
                     >
-                      <option value="agency_admin">Agency Admin</option>
+                      <option value="admin">Agency Admin</option>
                       <option value="agent">Agent</option>
                       <option value="finance">Finance</option>
                     </select>

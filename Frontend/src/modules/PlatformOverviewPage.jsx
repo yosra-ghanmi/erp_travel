@@ -45,7 +45,7 @@ function PremiumStatCard({ title, value, trend, hint, icon }) {
 export function PlatformOverviewPage({ agencies, users, bookings, payments, aiLogs }) {
   const activeAgencies = agencies.filter((agency) => agency.subscription_status === 'active').length
   const monthlyRevenue = payments.filter((payment) => payment.status === 'paid').reduce((sum, payment) => sum + payment.amount, 0)
-  const tenantUsers = users.filter((user) => user.role !== 'super_admin').length
+  const tenantUsers = users.filter((user) => user.role !== 'superadmin').length
   const totalAiCost = aiLogs.reduce((sum, item) => sum + item.cost, 0)
 
   return (

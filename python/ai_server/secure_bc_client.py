@@ -37,77 +37,122 @@ class BCResponseParseError(Exception):
 
 class SecureBCClient:
     """
-    Secure Business Central Client with mandatory agency-level filtering.
+    Secure Business Central Client with mandatory Navigo role-based filtering.
 
-    This class wraps BCClient to enforce data isolation at the API level.
-    All queries are automatically scoped to the user's agency, and all
-    writes automatically inject the agency code to prevent cross-tenant access.
+    This class enforces strict data isolation based on the four Navigo roles:
+    1. Superadmin: Global access, no filters.
+    2. Finance: Platform-wide financial data only.
+    3. Admin: Agency-wide access (filtered by Agency_ID).
+    4. Agent: Personal ownership only (filtered by Agent_ID/Salesperson_Code).
     """
 
-    SUPER_ADMIN_ROLE = "super_admin"
-    FINANCE_ROLE = "finance"
-    AGENCY_CODE_FIELD = "Global_Dimension_1_Code"
-    SALESPERSON_CODE_FIELD = "Salesperson_Code"
+    ROLE_SUPERADMIN = "superadmin"
+    ROLE_FINANCE = "finance"
+    ROLE_ADMIN = "admin"
+    ROLE_AGENT = "agent"
+
+    AGENCY_CODE_FIELD = "agency_code"
+    SALESPERSON_CODE_FIELD = "agent_code"
     AGENCY_ID_FIELD = "agency_id"
+
+    # Functional Access Mapping (Authorized entities per role)
+    ROLE_PERMISSIONS = {
+        ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses"],
+        ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses"], # Financial entities only
+        ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff"],
+        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations"]
+    }
 
     # Mapping of entity types to their BC API endpoints and filter fields
     ENTITY_CONFIG = {
         "clients": {
             "endpoint": "TravelClientAPI",
             "api_endpoint": "travelClients",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "no",
-            "writable_fields": ["Name", "Email", "Phone", "Country", "Notes", "Salesperson_Code", "Global_Dimension_1_Code"]
+            "writable_fields": ["no", "name", "email", "phone", "country", "notes", "agent_code", "agency_code"]
         },
         "bookings": {
             "endpoint": "TravelBookingAPI",
             "api_endpoint": "travelBookings",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "bookingId",
-            "writable_fields": ["ClientNo", "TripName", "StartDate", "EndDate", "Amount", "Notes", "Salesperson_Code", "Global_Dimension_1_Code"]
+            "writable_fields": ["bookingId", "clientNo", "tripName", "startDate", "endDate", "amount", "notes", "agent_code", "agency_code"]
         },
         "quotes": {
             "endpoint": "TravelQuoteAPI",
             "api_endpoint": "travelQuotes",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "quoteNo",
-            "writable_fields": ["ClientNo", "ServiceCode", "QuoteDate", "ValidUntilDate", "Status",
-                               "DiscountPercent", "CurrencyCode", "Salesperson_Code", "Global_Dimension_1_Code"]
+            "writable_fields": ["quoteNo", "clientNo", "serviceCode", "quoteDate", "validUntilDate", "status",
+                               "discount_percent", "currencyCode", "agent_code", "agency_code"]
         },
         "invoices": {
             "endpoint": "TravelInvoiceAPI",
             "api_endpoint": "travelInvoices",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "invoiceNo",
-            "writable_fields": ["QuoteNo", "ClientNo", "InvoiceDate", "DueDate", "Status", "Salesperson_Code", "Global_Dimension_1_Code"]
+            "writable_fields": ["invoiceNo", "quoteNo", "clientNo", "invoiceDate", "dueDate", "status", "agent_code", "agency_code"]
         },
         "payments": {
             "endpoint": "TravelPaymentAPI",
             "api_endpoint": "travelPayments",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "paymentId",
-            "writable_fields": ["ClientNo", "BookingId", "InvoiceNo", "Amount", "Method", "Date", "Global_Dimension_1_Code"]
+            "writable_fields": ["paymentId", "clientNo", "bookingId", "invoiceNo", "amount", "method", "date", "agent_code", "agency_code"]
         },
         "reservations": {
             "endpoint": "TravelReservationAPI",
             "api_endpoint": "travelReservations",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "reservationNo",
-            "writable_fields": ["ClientNo", "ServiceCode", "ReservationDate", "Status", "Global_Dimension_1_Code"]
+            "writable_fields": ["reservationNo", "clientNo", "serviceCode", "reservationDate", "status", "agent_code", "agency_code"]
         },
         "services": {
             "endpoint": "TravelServiceAPI",
             "api_endpoint": "travelServices",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "code",
-            "writable_fields": ["Name", "Destination", "ServiceType", "Price", "CurrencyCode", "Global_Dimension_1_Code"]
+            "writable_fields": ["code", "name", "destination", "serviceType", "price", "currencyCode", "agent_code", "agency_code"]
+        },
+        "offers": {
+            "endpoint": "TravelOfferAPI",
+            "api_endpoint": "travelOffers",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
+            "id_field": "id",
+            "writable_fields": ["id", "title", "destination", "summary", "durationDays", "price", "currencyCode", "agent_code", "agency_code"]
         },
         "expenses": {
             "endpoint": "TravelExpenseAPI",
             "api_endpoint": "travelExpenses",
-            "filter_field": "Global_Dimension_1_Code",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
             "id_field": "expenseId",
-            "writable_fields": ["Type", "Amount", "Date", "Description", "Global_Dimension_1_Code"]
+            "writable_fields": ["expenseId", "type", "amount", "date", "description", "agent_code", "agency_code"]
+        },
+        "quote_lines": {
+            "endpoint": "TravelQuoteLineAPI",
+            "api_endpoint": "travelQuoteLines",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
+            "id_field": "lineNo",
+            "writable_fields": ["quoteNo", "lineNo", "serviceCode", "quantity", "numberOfNights", "agent_code", "agency_code"]
+        },
+        "invoice_lines": {
+            "endpoint": "TravelInvoiceLineAPI",
+            "api_endpoint": "travelInvoiceLines",
+            "filter_field": "agency_code",
+            "agent_field": "agent_code",
+            "id_field": "lineNo",
+            "writable_fields": ["invoiceNo", "lineNo", "description", "quantity", "unitPrice", "amount", "agent_code", "agency_code"]
         }
     }
 
@@ -123,32 +168,27 @@ class SecureBCClient:
         password: Optional[str] = None
     ):
         """
-        Initialize the Secure BC Client.
+        Initialize the Secure BC Client with Navigo Role Logic.
 
         Args:
-            agency_id: The agency code this client is scoped to (e.g., "AG-001")
-            user_id: The employee ID of the current user
-            user_role: The role of the current user (used for admin bypass)
-            base_url: Business Central base URL
-            company_name: Company name in BC
-            auth_mode: Authentication mode (basic, ntlm, windows, sspi)
-            username: Username for basic auth
-            password: Password for basic auth
+            agency_id: Agency ID (Required for Admin and Agent)
+            user_id: Logged-in User ID (Required for Agent)
+            user_role: One of (superadmin, finance, admin, agent)
         """
         self.agency_id = agency_id
         self.user_id = user_id
-        self.user_role = user_role
+        self.user_role = user_role.lower()
         
-        # Super Admin and Finance bypass agency-level filtering
-        self.is_privileged_role = user_role in (self.SUPER_ADMIN_ROLE, self.FINANCE_ROLE)
-        self.is_super_admin = (user_role == self.SUPER_ADMIN_ROLE)
+        # Superadmin and Finance have global/platform scope
+        self.is_platform_scope = self.user_role in (self.ROLE_SUPERADMIN, self.ROLE_FINANCE)
+        self.is_super_admin = (self.user_role == self.ROLE_SUPERADMIN)
 
-        # If agency_id is None/empty for non-privileged roles, raise immediately
-        if not self.is_privileged_role and not agency_id:
-            raise AgencySECURITYError(
-                "SECURITY VIOLATION: Non-privileged user missing agency_id. "
-                "All Agent and Agency Admin requests MUST be scoped to an agency."
-            )
+        # SECURITY VALIDATION
+        if self.user_role in (self.ROLE_ADMIN, self.ROLE_AGENT) and not agency_id:
+            raise AgencySECURITYError(f"Navigo SECURITY: Agency-level role '{self.user_role}' requires Agency_ID.")
+        
+        if self.user_role == self.ROLE_AGENT and not user_id:
+            raise AgencySECURITYError("Navigo SECURITY: Agent role requires User_ID for personal scope filtering.")
 
         self.base_url = base_url or os.getenv("BC_BASE_URL", "http://saif-pc:7049/BC250")
         self.company_name = company_name or os.getenv("BC_COMPANY_NAME", "smart travel agency")
@@ -160,6 +200,22 @@ class SecureBCClient:
         self.session.headers.update({"Content-Type": "application/json"})
         self._company_id = None
         self._company_root_cache = None
+
+    def _check_permission(self, action: str, entity_type: str):
+        """Verify if the current role is authorized for this entity."""
+        # 1. Basic entity authorization
+        allowed_entities = self.ROLE_PERMISSIONS.get(self.user_role, [])
+        if entity_type not in allowed_entities:
+            raise AgencySECURITYError(
+                f"Navigo ACCESS DENIED: Role '{self.user_role}' is not authorized to access '{entity_type}'."
+            )
+
+        # 2. Write Restriction: Only Superadmin can Create/Update/Delete Global entities (Services, Offers)
+        if action in ("create", "update", "delete") and entity_type in ("services", "offers"):
+            if self.user_role != self.ROLE_SUPERADMIN:
+                raise AgencySECURITYError(
+                    f"Navigo ACCESS DENIED: Only Superadmin can {action} {entity_type}. Agents and Admins have read-only access."
+                )
 
     def _auth(self):
         """Return the appropriate auth handler based on auth mode."""
@@ -235,39 +291,71 @@ class SecureBCClient:
     def _inject_agency_code(self, payload: Dict, entity_type: str) -> Dict:
         """
         Inject agency code and salesperson code into write payloads.
-        This prevents users from spoofing data into another agency's records.
+        Strictly enforces ownership based on Navigo roles.
         """
         config = self.ENTITY_CONFIG.get(entity_type, {})
         
-        # 1. Inject Global Dimension 1 (Agency Code)
+        # 1. Enforce AgencyID for Agency-level roles (Admin/Agent)
         agency_field = self.AGENCY_CODE_FIELD
         if agency_field in config.get("writable_fields", []):
-            if not self.is_privileged_role:
+            if self.user_role in (self.ROLE_ADMIN, self.ROLE_AGENT):
                 payload[agency_field] = self.agency_id
-            elif agency_field not in payload or not payload[agency_field]:
-                payload[agency_field] = self.agency_id
+            elif self.user_role == self.ROLE_SUPERADMIN and agency_field not in payload:
+                # Superadmin can specify agency or default to own
+                if self.agency_id:
+                    payload[agency_field] = self.agency_id
 
-        # 2. Inject Salesperson Code (User Employee ID)
+        # 2. Enforce AgentID (Salesperson_Code) for Agent role
         salesperson_field = self.SALESPERSON_CODE_FIELD
         if salesperson_field in config.get("writable_fields", []):
-            if self.user_id:
+            if self.user_role == self.ROLE_AGENT:
+                payload[salesperson_field] = self.user_id
+            elif self.user_id and salesperson_field not in payload:
+                # Others default to self if not specified
                 payload[salesperson_field] = self.user_id
 
         return payload
 
-    def _get_agency_filter_condition(self, entity_type: str) -> Optional[str]:
-        """Get the agency filter condition for a given entity type."""
-        # Super Admin and Finance bypass agency-level filtering
-        if self.is_privileged_role:
+    def _get_agency_filter_condition(self, entity_type: str, use_api_field: bool = False) -> Optional[str]:
+        """
+        Implements Navigo Hierarchical Filtering.
+        """
+        # Global Entities: Services and Offers are managed by Superadmin and shared across all.
+        if entity_type in ("services", "offers"):
+            return None
+
+        # 1. Superadmin: No filters (Global scope)
+        if self.user_role == self.ROLE_SUPERADMIN:
+            return None
+
+        # 2. Finance: Platform-wide scope but restricted to financial entities (handled by _check_permission)
+        if self.user_role == self.ROLE_FINANCE:
             return None
 
         config = self.ENTITY_CONFIG.get(entity_type, {})
-        filter_field = config.get("filter_field")
+        conditions = []
 
-        if not filter_field or not self.agency_id:
+        # 3. Admin: Agency-wide scope (record.AgencyID == User.Agency_ID)
+        if self.user_role == self.ROLE_ADMIN:
+            agency_field = config.get("filter_field")
+            if agency_field and self.agency_id:
+                conditions.append(f"{agency_field} eq '{self.agency_id}'")
+
+        # 4. Agent: Personal scope (record.AgentID == User_ID)
+        elif self.user_role == self.ROLE_AGENT:
+            agency_field = config.get("filter_field")
+            agent_field = config.get("agent_field")
+            
+            # Must be in their agency AND be their record
+            if agency_field and self.agency_id:
+                conditions.append(f"{agency_field} eq '{self.agency_id}'")
+            if agent_field and self.user_id:
+                conditions.append(f"{agent_field} eq '{self.user_id}'")
+
+        if not conditions:
             return None
 
-        return f"{filter_field} eq '{self.agency_id}'"
+        return " and ".join(conditions)
 
     def _handle_error(self, r: requests.Response, prefix: str) -> str:
         """Parse BC error response into readable message."""
@@ -293,72 +381,113 @@ class SecureBCClient:
         top: Optional[int] = None
     ) -> List[Dict]:
         """
-        Perform a SECURE GET request with mandatory agency filtering.
-
-        Args:
-            entity_type: Type of entity (clients, bookings, quotes, etc.)
-            entity_id: Optional specific ID to fetch (uses filter, not OData key)
-            filters: Additional OData filter conditions (will be AND'd with agency filter)
-            order_by: OData orderby string
-            top: Maximum number of records to return
-
-        Returns:
-            List of matching records with lowercase field names
+        Perform a SECURE GET with automatic Navigo role filtering.
         """
+        self._check_permission("read", entity_type)
+        
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        agency_filter = self._get_agency_filter_condition(entity_type)
+        # 1. Build secure filters (OData style)
+        agency_cond = self._get_agency_filter_condition(entity_type, use_api_field=False)
         all_filters = (filters or []).copy()
-        if agency_filter:
-            all_filters.append(agency_filter)
+        if agency_cond:
+            all_filters.append(agency_cond)
 
-        filter_query = self._build_filter(None, all_filters)
-
+        # Build query string parts
         query_parts = []
-        if filter_query:
-            query_parts.append(filter_query)
+        if all_filters:
+            combined = " and ".join(f"({f})" for f in all_filters if f)
+            if combined:
+                query_parts.append(f"$filter={quote(combined)}")
+        
         if order_by:
             query_parts.append(f"$orderby={quote(order_by)}")
+        
         if top:
             query_parts.append(f"$top={top}")
-
+            
         query_string = "&".join(query_parts)
 
-        # Try OData endpoint first
+        # Try OData first
+        odata_error = None
         try:
-            url = f"{self._company_root()}/{config['endpoint']}"
             if entity_id:
-                url = f"{self._company_root()}/{config['endpoint']}?$filter={config['id_field']} eq '{entity_id}'"
+                # Direct lookup by ID in OData
+                url = f"{self._company_root()}/{config['endpoint']}('{entity_id}')"
+            else:
+                url = f"{self._company_root()}/{config['endpoint']}"
                 if query_string:
-                    query_string = query_string.replace("$filter=", "")
-            if query_string:
-                url = f"{url}?{query_string}"
-
+                    url = f"{url}?{query_string}"
+            
             logger.info(f"SECURE GET (OData): {url}")
             r = self.session.get(url, auth=self._auth(), timeout=20)
             r.raise_for_status()
-            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            
+            data = r.json()
+            if entity_id:
+                # OData direct lookup returns a single object
+                result = {k.lower(): v for k, v in data.items()}
+                
+                # Manual security check for direct ID lookups if filtering didn't happen at source
+                # Skip check for global entities (services, offers)
+                if not self.is_platform_scope and entity_type not in ("services", "offers"):
+                    # Check agency
+                    if config.get("filter_field") and result.get(config["filter_field"].lower()) != self.agency_id:
+                        raise AgencySECURITYError("Access Denied: Record belongs to another agency.")
+                    # Check agent if role is agent
+                    if self.user_role == self.ROLE_AGENT and config.get("agent_field") and result.get(config["agent_field"].lower()) != self.user_id:
+                        raise AgencySECURITYError("Access Denied: Record belongs to another agent.")
+                
+                return [result]
+            
+            # OData list returns { "value": [...] }
+            return [{k.lower(): v for k, v in item.items()} for item in data.get("value", [])]
         except Exception as e:
-            logger.info(f"OData failed, trying API endpoint: {e}")
+            if isinstance(e, AgencySECURITYError): raise e
+            odata_error = str(e)
+            logger.warning(f"OData GET failed for {entity_type}, trying API endpoint: {odata_error}")
 
         # Fallback to API endpoint
         try:
-            url = f"{self._api_company_root()}/{config['api_endpoint']}"
+            # Build API-specific query if needed
+            agency_cond_api = self._get_agency_filter_condition(entity_type, use_api_field=True)
+            all_filters_api = (filters or []).copy()
+            if agency_cond_api:
+                all_filters_api.append(agency_cond_api)
+                
+            query_parts_api = []
+            if all_filters_api:
+                combined_api = " and ".join(f"({f})" for f in all_filters_api if f)
+                if combined_api:
+                    query_parts_api.append(f"$filter={quote(combined_api)}")
+            
+            if order_by:
+                query_parts_api.append(f"$orderby={quote(order_by)}")
+            if top:
+                query_parts_api.append(f"$top={top}")
+            
+            query_string_api = "&".join(query_parts_api)
+
             if entity_id:
                 url = f"{self._api_company_root()}/{config['api_endpoint']}?$filter={config['id_field']} eq '{entity_id}'"
-                if query_string:
-                    query_string = query_string.replace("$filter=", "")
-            if query_string:
-                url = f"{url}?{query_string}"
-
+                if agency_cond_api:
+                    url += f" and {agency_cond_api}"
+            else:
+                url = f"{self._api_company_root()}/{config['api_endpoint']}"
+                if query_string_api:
+                    url = f"{url}?{query_string_api}"
+            
             logger.info(f"SECURE GET (API): {url}")
             r = self.session.get(url, auth=self._auth(), timeout=20)
             r.raise_for_status()
-            return [{k.lower(): v for k, v in item.items()} for item in r.json().get("value", [])]
+            
+            data = r.json()
+            return [{k.lower(): v for k, v in item.items()} for item in data.get("value", [])]
         except Exception as e2:
-            raise Exception(f"SECURE GET Failed for {entity_type}. OData: {e}, API: {e2}")
+            if isinstance(e2, AgencySECURITYError): raise e2
+            raise Exception(f"SECURE GET Failed for {entity_type}. OData: {odata_error}, API: {e2}")
 
     def secure_create(
         self,
@@ -367,22 +496,21 @@ class SecureBCClient:
         id_field: Optional[str] = None
     ) -> Dict:
         """
-        Perform a SECURE CREATE with automatic agency code injection.
-
-        Args:
-            entity_type: Type of entity being created
-            payload: The data to create (agency code will be auto-injected)
-            id_field: Optional field name for returning the created record
-
-        Returns:
-            The created record with lowercase field names
+        Perform a SECURE CREATE with automatic Navigo ownership injection.
         """
+        self._check_permission("create", entity_type)
+        
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        # CRITICAL: Inject agency code to prevent cross-tenant writes
+        # CRITICAL: Inject agency/agent code based on role
         secure_payload = self._inject_agency_code(payload.copy(), entity_type)
+
+        # Filter fields based on ENTITY_CONFIG
+        writable_fields = config.get("writable_fields", [])
+        if writable_fields:
+            secure_payload = {k: v for k, v in secure_payload.items() if k in writable_fields}
 
         # Try OData first
         try:
@@ -392,7 +520,8 @@ class SecureBCClient:
             r.raise_for_status()
             return {k.lower(): v for k, v in r.json().items()}
         except Exception as e:
-            logger.info(f"OData create failed, trying API: {e}")
+            odata_error = str(e)
+            logger.info(f"OData create failed, trying API: {odata_error}")
 
         # Fallback to API endpoint
         try:
@@ -402,7 +531,10 @@ class SecureBCClient:
             r.raise_for_status()
             return {k.lower(): v for k, v in r.json().items()}
         except Exception as e2:
-            raise Exception(f"SECURE CREATE Failed for {entity_type}. OData: {e}, API: {e2}")
+            raise Exception(f"SECURE CREATE Failed for {entity_type}. OData: {odata_error}, API: {e2}")
+
+    # Alias for secure_create
+    secure_post = secure_create
 
     def secure_update(
         self,
@@ -412,33 +544,24 @@ class SecureBCClient:
         use_etag: bool = True
     ) -> Dict:
         """
-        Perform a SECURE UPDATE with automatic agency code injection and ETag handling.
-
-        Args:
-            entity_type: Type of entity being updated
-            entity_id: ID of the record to update
-            payload: The update data (agency code will be verified/injected)
-            use_etag: Whether to use ETag for optimistic concurrency
-
-        Returns:
-            The updated record with lowercase field names
+        Perform a SECURE UPDATE with Navigo ownership verification.
         """
+        self._check_permission("update", entity_type)
+        
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        id_field = config.get("id_field", "id")
+        # Verify ownership before update
+        self.secure_get(entity_type, entity_id)
 
-        # Verify the record exists and belongs to user's agency before updating
-        existing = self.secure_get(entity_type, entity_id)
-        if not existing:
-            raise AgencySECURITYError(
-                f"Cannot update {entity_type} {entity_id}: Record not found or "
-                f"access denied (agency mismatch)"
-            )
-
-        # Inject agency code (should already be correct, but we verify)
+        # Inject/Verify agency code
         secure_payload = self._inject_agency_code(payload.copy(), entity_type)
+
+        # Filter fields based on ENTITY_CONFIG
+        writable_fields = config.get("writable_fields", [])
+        if writable_fields:
+            secure_payload = {k: v for k, v in secure_payload.items() if k in writable_fields}
 
         headers = self.session.headers.copy()
         if use_etag:
@@ -452,7 +575,8 @@ class SecureBCClient:
             r.raise_for_status()
             return {k.lower(): v for k, v in r.json().items()}
         except Exception as e:
-            logger.info(f"OData update failed, trying API: {e}")
+            odata_error = str(e)
+            logger.info(f"OData update failed, trying API: {odata_error}")
 
         # Fallback to API endpoint
         try:
@@ -462,30 +586,20 @@ class SecureBCClient:
             r.raise_for_status()
             return {k.lower(): v for k, v in r.json().items()}
         except Exception as e2:
-            raise Exception(f"SECURE UPDATE Failed for {entity_type}/{entity_id}. OData: {e}, API: {e2}")
+            raise Exception(f"SECURE UPDATE Failed for {entity_type}/{entity_id}. OData: {odata_error}, API: {e2}")
 
     def secure_delete(self, entity_type: str, entity_id: str) -> bool:
         """
-        Perform a SECURE DELETE with agency verification.
-
-        Args:
-            entity_type: Type of entity being deleted
-            entity_id: ID of the record to delete
-
-        Returns:
-            True if deleted successfully
+        Perform a SECURE DELETE with Navigo ownership verification.
         """
+        self._check_permission("delete", entity_type)
+        
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:
             raise ValueError(f"Unknown entity type: {entity_type}")
 
-        # Verify the record exists and belongs to user's agency
-        existing = self.secure_get(entity_type, entity_id)
-        if not existing:
-            raise AgencySECURITYError(
-                f"Cannot delete {entity_type} {entity_id}: Record not found or "
-                f"access denied (agency mismatch)"
-            )
+        # Verify ownership before delete
+        self.secure_get(entity_type, entity_id)
 
         headers = self.session.headers.copy()
         headers["If-Match"] = "*"
@@ -498,7 +612,8 @@ class SecureBCClient:
             r.raise_for_status()
             return True
         except Exception as e:
-            logger.info(f"OData delete failed, trying API: {e}")
+            odata_error = str(e)
+            logger.info(f"OData delete failed, trying API: {odata_error}")
 
         # Fallback to API endpoint
         try:
@@ -508,40 +623,44 @@ class SecureBCClient:
             r.raise_for_status()
             return True
         except Exception as e2:
-            raise Exception(f"SECURE DELETE Failed for {entity_type}/{entity_id}. OData: {e}, API: {e2}")
+            raise Exception(f"SECURE DELETE Failed for {entity_type}/{entity_id}. OData: {odata_error}, API: {e2}")
 
 
 # =============================================================================
 # FASTAPI DEPENDENCY / MIDDLEWARE
 # =============================================================================
 
-def extract_identity_from_request(request: Request) -> tuple[str, str]:
+def extract_identity_from_request(request: Request) -> tuple[str, str, str]:
     """
-    Extract agency_id and user_role from the incoming request.
+    Extract agency_id, user_role, and user_id from the incoming request.
 
     In production, this would decode a JWT token or look up the session.
     For this implementation, we support:
     - X-Agency-ID header
     - X-User-Role header
+    - X-User-ID header
     - Query parameters as fallback
 
     Args:
         request: FastAPI Request object
 
     Returns:
-        Tuple of (agency_id, user_role)
+        Tuple of (agency_id, user_role, user_id)
     """
     # Priority 1: Headers (set by upstream auth proxy)
     agency_id = request.headers.get("X-Agency-ID", "")
     user_role = request.headers.get("X-User-Role", "agent").lower()
+    user_id = request.headers.get("X-User-ID", "")
 
     # Priority 2: Query parameters (for development/testing)
     if not agency_id:
         agency_id = request.query_params.get("agency_id", "")
     if not user_role or user_role == "agent":
         user_role = request.query_params.get("user_role", "agent").lower()
+    if not user_id:
+        user_id = request.query_params.get("user_id", "")
 
-    return agency_id, user_role
+    return agency_id, user_role, user_id
 
 
 def get_secure_bc_client(request: Request) -> SecureBCClient:
@@ -553,8 +672,8 @@ def get_secure_bc_client(request: Request) -> SecureBCClient:
         def get_clients(client: SecureBCClient = Depends(get_secure_bc_client)):
             return client.secure_get("clients")
     """
-    agency_id, user_role = extract_identity_from_request(request)
-    return SecureBCClient(agency_id=agency_id, user_role=user_role)
+    agency_id, user_role, user_id = extract_identity_from_request(request)
+    return SecureBCClient(agency_id=agency_id, user_role=user_role, user_id=user_id)
 
 
 def require_role(required_role: str):
@@ -563,14 +682,14 @@ def require_role(required_role: str):
 
     Usage:
         @app.get("/admin/stats")
-        @require_role("super_admin")
+        @require_role("superadmin")
         def admin_stats(client: SecureBCClient = Depends(get_secure_bc_client)):
             ...
     """
     def role_checker(request: Request):
-        _, user_role = extract_identity_from_request(request)
-        if required_role == "super_admin":
-            if user_role != "super_admin":
+        _, user_role, _ = extract_identity_from_request(request)
+        if required_role == "superadmin":
+            if user_role != "superadmin":
                 raise HTTPException(
                     status_code=403,
                     detail=f"Access denied. Required role: {required_role}"
@@ -594,6 +713,7 @@ class BCClient(SecureBCClient):
     def __init__(self, base_url=None, company_name=None):
         super().__init__(
             agency_id=os.getenv("DEFAULT_AGENCY_ID", ""),
+            user_id=os.getenv("DEFAULT_USER_ID", ""),
             user_role=os.getenv("DEFAULT_USER_ROLE", "agent"),
             base_url=base_url,
             company_name=company_name

@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react'
 export const AuthContext = createContext(null)
 
 export const permissionsMap = {
-  super_admin: {
+  superadmin: {
     agencies: { create: true, read: true, update: true, delete: true },
     staff: { create: false, read: false, update: false, delete: false },
     clients: { create: false, read: false, update: false, delete: false },
@@ -12,7 +12,7 @@ export const permissionsMap = {
     finances: { create: false, read: true, update: false, delete: false },
     ai: { create: false, read: true, update: false, delete: false },
   },
-  agency_admin: {
+  admin: {
     agencies: { create: false, read: true, update: true, delete: false },
     staff: { create: true, read: true, update: true, delete: true },
     clients: { create: true, read: true, update: true, delete: true },

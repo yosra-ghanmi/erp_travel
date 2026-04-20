@@ -4,6 +4,29 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
 });
 
+// Add a request interceptor to inject agency and user headers
+api.interceptors.request.use(
+  (config) => {
+    const savedSession = localStorage.getItem("erp_session");
+    if (savedSession) {
+      const session = JSON.parse(savedSession);
+      if (session.agency_id) {
+        config.headers["X-Agency-ID"] = session.agency_id;
+      }
+      if (session.role) {
+        config.headers["X-User-Role"] = session.role;
+      }
+      if (session.id) {
+        config.headers["X-User-ID"] = session.id;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const syncOffers = async () => {
   const { data } = await api.get("/api/sync-offers");
   return data;
@@ -14,7 +37,17 @@ export const generateItinerary = async (travelOfferId) => {
   return data;
 };
 
-// Clients
+export const createTravelOffer = async (offerData) => {
+  const { data } = await api.post("/api/travel-offers", offerData);
+  return data;
+};
+
+export const deleteTravelOffer = async (offerId) => {
+  const { data } = await api.delete(`/api/travel-offers/${offerId}`);
+  return data;
+};
+
+// Agency AdminClients
 export const fetchClients = async () => {
   const { data } = await api.get("/api/clients");
   return data.clients;
@@ -129,8 +162,18 @@ export const fetchInvoiceLines = async (invoiceNo) => {
 
 // Agency Admin
 export const createAgencyAdmin = async (agencyId, agencyName, ownerEmail) => {
-  const { data } = await api.post("/api/agency-admin", { agency_id: agencyId, agency_name: agencyName, owner_email: ownerEmail });
+  const { data } = await api.post("/api/agency-admin", {
+    agency_id: agencyId,
+    agency_name: agencyName,
+    owner_email: ownerEmail,
+  });
   return data;
+};
+
+// Users
+export const fetchUsers = async () => {
+  const { data } = await api.get("/api/users");
+  return data.users;
 };
 
 // Agencies
@@ -146,6 +189,11 @@ export const createAgency = async (agencyData) => {
 
 export const updateAgency = async (agencyId, patch) => {
   const { data } = await api.patch(`/api/agencies/${agencyId}`, patch);
+  return data;
+};
+
+export const deleteAgency = async (agencyId) => {
+  const { data } = await api.delete(`/api/agencies/${agencyId}`);
   return data;
 };
 

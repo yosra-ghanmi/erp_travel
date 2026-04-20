@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 export const modulesByRole = {
-  super_admin: [
+  superadmin: [
     {
       key: "platform_overview",
       label: "Platform Overview",
@@ -25,7 +25,7 @@ export const modulesByRole = {
     { key: "ai_usage_logs", label: "AI Usage Logs", icon: BrainCircuit },
     { key: "system_settings", label: "System Settings", icon: Settings },
   ],
-  agency_admin: [
+  admin: [
     {
       key: "agency_dashboard",
       label: "Agency Dashboard",
@@ -58,8 +58,8 @@ export const modulesByRole = {
 };
 
 export const defaultModuleByRole = {
-  super_admin: "platform_overview",
-  agency_admin: "agency_dashboard",
+  superadmin: "platform_overview",
+  admin: "agency_dashboard",
   agent: "my_dashboard",
   finance: "agency_finances",
 };

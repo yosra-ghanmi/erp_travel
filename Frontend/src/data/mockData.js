@@ -1,6 +1,6 @@
 const today = new Date();
 
-export const roleOptions = ["super_admin", "agency_admin", "agent", "finance"];
+export const roleOptions = ["superadmin", "admin", "agent", "finance"];
 
 export const agencies = [
   {
@@ -25,7 +25,7 @@ export const users = [
     name: "Platform Owner",
     email: "super@navigo.com",
     password: "123456",
-    role: "super_admin",
+    role: "superadmin",
     agency_id: null,
   },
   {
@@ -33,7 +33,7 @@ export const users = [
     name: "Amina Atlas",
     email: "admin@navigo.com",
     password: "123456",
-    role: "agency_admin",
+    role: "admin",
     agency_id: "AG-001",
   },
   {
@@ -57,7 +57,7 @@ export const users = [
     name: "Sofia BluePalm",
     email: "admin@navigo.com",
     password: "123456",
-    role: "agency_admin",
+    role: "admin",
     agency_id: "AG-002",
   },
   {

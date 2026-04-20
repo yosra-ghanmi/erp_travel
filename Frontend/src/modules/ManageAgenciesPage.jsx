@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { BadgePlus, Eye, EyeOff, LogIn, Pencil, Power } from "lucide-react";
+import {
+  BadgePlus,
+  Eye,
+  EyeOff,
+  LogIn,
+  Pencil,
+  Power,
+  Trash2,
+} from "lucide-react";
 import {
   Button,
   DataTable,
@@ -24,6 +32,7 @@ export function ManageAgenciesPage({
   onToggleSubscription,
   onAddAgency,
   onEditAgency,
+  onDeleteAgency,
   onImpersonate,
 }) {
   const [form, setForm] = useState(blankAgency);
@@ -58,7 +67,7 @@ export function ManageAgenciesPage({
     });
   };
 
-  const adminUsers = users.filter((user) => user.role === "agency_admin");
+  const adminUsers = users.filter((user) => user.role === "admin");
 
   return (
     <div className="space-y-5">
@@ -120,6 +129,14 @@ export function ManageAgenciesPage({
                     >
                       <LogIn className="h-4 w-4" />
                     </Button>
+                    {onDeleteAgency && (
+                      <Button
+                        variant="danger"
+                        onClick={() => onDeleteAgency(agency.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>
