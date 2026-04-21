@@ -62,7 +62,7 @@ class SecureBCClient:
         ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses"],
         ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses"], # Financial entities only
         ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff"],
-        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations"]
+        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations", "invoices", "invoice_lines", "payments"]
     }
 
     # Action Restrictions (Deny specific actions for specific roles)

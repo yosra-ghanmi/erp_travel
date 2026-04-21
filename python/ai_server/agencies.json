@@ -20,5 +20,20 @@
     "owner_id": "ADM-AG-004",
     "created_at": "2026-04-15",
     "is_active": true
+  },
+  {
+    "id": "AG-003",
+    "agency_id": "AG-003",
+    "name": "melek tour",
+    "logo": "/logo-agency.png",
+    "email": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "country": null,
+    "subscription_status": "active",
+    "owner_id": "ADM-AG-003",
+    "created_at": "2026-04-21",
+    "is_active": true
   }
 ]
