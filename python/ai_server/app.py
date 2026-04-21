@@ -395,13 +395,41 @@ def create_quote(quote: TravelQuote, client: SecureBCClient = Depends(get_secure
         service_items = payload.get("serviceItems", [])
         service_codes = payload.get("serviceCodes", [])
         
-        # 1. Handle first service (Header mapping)
+        # --- NEW: Sync local offers if used in quote ---
+        def _ensure_offer_synced(code, ltype):
+            if ltype == "Offer" and code.startswith("OFFER-"):
+                local_offers = _load_offers()
+                match = next((o for o in local_offers if o.get("id") == code), None)
+                if match:
+                    try:
+                        # Normalize using pydantic model to handle field mapping (snake_case -> camelCase)
+                        from models import TravelOffer
+                        offer_obj = TravelOffer(**match)
+                        sync_payload = json.loads(offer_obj.json(by_alias=True, exclude_none=True))
+                        
+                        # Check if it already exists in BC to avoid 409
+                        try:
+                            client.secure_get("offers", code)
+                            logger.info(f"Offer {code} already exists in BC.")
+                        except:
+                            logger.info(f"Syncing local offer {code} to BC...")
+                            client.secure_create("offers", sync_payload)
+                    except Exception as sync_err:
+                        logger.error(f"Auto-sync for offer {code} failed: {sync_err}")
+                        raise HTTPException(status_code=500, detail=f"Failed to sync offer {code} to Business Central: {str(sync_err)}")
+
+        # Handle first service (Header mapping)
         if service_items:
-            payload["serviceCode"] = service_items[0]["serviceCode"]
-            payload["quantity"] = service_items[0].get("quantity", 1)
-            payload["numberOfNights"] = service_items[0].get("numberOfNights", 1)
+            item0 = service_items[0]
+            _ensure_offer_synced(item0["serviceCode"], item0.get("lineType", "Service"))
+            payload["serviceCode"] = item0["serviceCode"]
+            payload["lineType"] = item0.get("lineType", "Service")
+            payload["quantity"] = item0.get("quantity", 1)
+            payload["numberOfNights"] = item0.get("numberOfNights", 1)
         elif service_codes:
+            # Service codes are usually services, but we check anyway
             payload["serviceCode"] = service_codes[0]
+            payload["lineType"] = "Service"
             payload["quantity"] = 1
             payload["numberOfNights"] = 1
             
@@ -419,9 +447,11 @@ def create_quote(quote: TravelQuote, client: SecureBCClient = Depends(get_secure
         # 3. Create additional lines if multiple items provided
         if len(service_items) > 1:
             for i, item in enumerate(service_items[1:]):
+                _ensure_offer_synced(item["serviceCode"], item.get("lineType", "Service"))
                 line_payload = {
                     "quoteNo": quote_no,
                     "lineNo": (i + 2) * 10000,
+                    "lineType": item.get("lineType", "Service"),
                     "serviceCode": item["serviceCode"],
                     "quantity": item.get("quantity", 1),
                     "numberOfNights": item.get("numberOfNights", 1)
@@ -629,43 +659,48 @@ def generate(req: GenerateRequest):
 
 
 @app.get("/api/sync-offers", response_model=SyncOffersResponse)
-def sync_offers():
+def sync_offers(client: SecureBCClient = Depends(get_secure_bc_client)):
     # 1. Load local offers first
     local_offers = _load_offers()
     offers = [TravelOffer(**o) for o in local_offers]
 
-    # 2. Try to sync with Business Central
-    tenant_id = os.getenv("AZURE_TENANT_ID", "")
-    client_id = os.getenv("AZURE_CLIENT_ID", "")
-    client_secret = os.getenv("AZURE_CLIENT_SECRET", "")
-    scope = os.getenv("BC_OAUTH_SCOPE", "https://api.businesscentral.dynamics.com/.default")
-    base_url = os.getenv("BC_OAUTH_BASE_URL", "")
-    company_name = os.getenv("BC_COMPANY_NAME", "smart travel agency")
-    endpoint = os.getenv("BC_TRAVEL_OFFERS_ENDPOINT", "TravelOfferAPI")
-    
-    if tenant_id and client_id and client_secret and base_url:
-        try:
-            token = get_azure_ad_token(tenant_id, client_id, client_secret, scope)
-            raw_offers = fetch_travel_offers(token, base_url, company_name, endpoint)
-            for raw in raw_offers:
-                offers.append(TravelOffer(
-                    id=str(raw.get("id") or raw.get("no")),
-                    title=raw.get("title") or "Travel Offer",
-                    destination=raw.get("destination"),
-                    summary=raw.get("summary"),
-                    duration_days=raw.get("durationDays"),
-                    price=raw.get("price"),
-                    currency=raw.get("currencyCode"),
-                    highlights=[]
-                ))
-        except Exception as e:
-            logger.warning(f"Failed to sync with Business Central: {e}")
+    # 2. Sync with Business Central using SecureBCClient
+    try:
+        raw_offers = client.secure_get("offers")
+        for raw in raw_offers:
+            # Avoid adding local offers that are already in BC (by ID)
+            if any(str(o.id) == str(raw.get("id") or raw.get("no")) for o in offers):
+                continue
+                
+            offers.append(TravelOffer(
+                id=str(raw.get("id") or raw.get("no")),
+                title=raw.get("title") or "Travel Offer",
+                destination=raw.get("destination"),
+                summary=raw.get("summary"),
+                duration_days=raw.get("durationdays") or raw.get("duration_days"),
+                price=raw.get("price"),
+                currency=raw.get("currencycode") or raw.get("currency_code"),
+                startDate=raw.get("startdate") or raw.get("start_date"),
+                endDate=raw.get("enddate") or raw.get("end_date"),
+                highlights=[]
+            ))
+    except Exception as e:
+        logger.warning(f"Failed to sync with Business Central via SecureBCClient: {e}")
 
     return SyncOffersResponse(offers=offers)
 
 @app.post("/api/travel-offers")
-def create_travel_offer(offer: TravelOffer):
+def create_travel_offer(offer: TravelOffer, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
+        # 1. Save to Business Central if the user has permission
+        try:
+            payload = json.loads(offer.json(by_alias=True, exclude_none=True))
+            bc_offer = client.secure_create("offers", payload)
+            return bc_offer
+        except Exception as bc_err:
+            logger.warning(f"Business Central offer creation failed: {bc_err}. Saving locally.")
+
+        # 2. Fallback to local storage
         offers = _load_offers()
         new_offer = json.loads(offer.json())
         offers.append(new_offer)
@@ -676,22 +711,51 @@ def create_travel_offer(offer: TravelOffer):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/travel-offers/{offer_id}")
-def delete_travel_offer(offer_id: str):
+def delete_travel_offer(offer_id: str, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
+        # 1. Try deleting from BC first if it exists
+        try:
+            client.secure_delete("offers", offer_id)
+        except Exception as bc_err:
+            logger.warning(f"Failed to delete offer from Business Central: {bc_err}")
+
+        # 2. Delete from local storage
         offers = _load_offers()
         original_count = len(offers)
         offers = [o for o in offers if str(o.get("id")) != offer_id]
         
-        if len(offers) == original_count:
-            # Maybe it's not a local offer, but we can't delete BC offers easily
-            raise HTTPException(status_code=404, detail="Local travel offer not found")
+        if len(offers) == original_count and not str(offer_id).startswith("OFFER-"):
+             # If it wasn't a local offer and BC delete already failed/wasn't tried, then error
+             pass
             
         _save_offers(offers)
         return {"status": "success", "message": f"Travel offer {offer_id} deleted"}
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error deleting travel offer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/travel-offers/{offer_id}")
+def update_travel_offer(offer_id: str, offer: TravelOffer, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        # 1. Update in BC if it exists
+        try:
+            payload = json.loads(offer.json(by_alias=True, exclude_none=True))
+            client.secure_update("offers", offer_id, payload)
+        except Exception as bc_err:
+            logger.warning(f"Failed to update offer in Business Central: {bc_err}")
+
+        # 2. Update in local storage
+        offers = _load_offers()
+        for i, o in enumerate(offers):
+            if str(o.get("id")) == offer_id:
+                offers[i] = json.loads(offer.json())
+                offers[i]["id"] = offer_id # Keep original ID
+                break
+        
+        _save_offers(offers)
+        return {"status": "success", "message": f"Travel offer {offer_id} updated"}
+    except Exception as e:
+        logger.error(f"Error updating travel offer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

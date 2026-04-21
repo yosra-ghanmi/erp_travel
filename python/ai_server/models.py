@@ -77,10 +77,12 @@ class TravelService(BaseModel):
     destination: Optional[str] = Field(None, description="Destination location")
     type: Optional[str] = Field(None, alias="serviceType", description="Service type")
     price: Optional[float] = Field(None, description="Price")
-    currency: Optional[str] = Field(None, description="Currency code")
+    currency: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
     latitude: Optional[float] = Field(None, description="GPS latitude")
     longitude: Optional[float] = Field(None, description="GPS longitude")
     description: Optional[str] = Field(None, description="Service description")
+    location: Optional[str] = Field(None, description="City location")
+    image_url: Optional[str] = Field(None, alias="imageUrl", description="Image URL")
 
     class Config:
         populate_by_name = True
@@ -148,12 +150,14 @@ class GenerateResponse(BaseModel):
 
 
 class ServiceItem(BaseModel):
+    line_type: str = Field("Service", alias="lineType")
     service_code: str = Field(..., alias="serviceCode")
     quantity: float = Field(1.0)
     number_of_nights: Optional[float] = Field(None, alias="numberOfNights")
 
 class TravelQuote(BaseModel):
     quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
+    line_type: str = Field("Service", alias="lineType", description="Line type (Service or Offer)")
     service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
     quantity: Optional[float] = Field(None, description="Quantity (Number of Persons)")
     number_of_nights: Optional[float] = Field(None, alias="numberOfNights", description="Number of nights (for hotels)")
@@ -212,10 +216,15 @@ class TravelOffer(BaseModel):
     title: str = Field(..., description="Offer title")
     destination: Optional[str] = Field(None, description="Offer destination")
     summary: Optional[str] = Field(None, description="Short summary")
-    duration_days: Optional[int] = Field(None, description="Duration in days")
+    duration_days: Optional[int] = Field(None, alias="durationDays", description="Duration in days")
     price: Optional[float] = Field(None, description="Base price")
-    currency: Optional[str] = Field(None, description="Currency code")
+    currency: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
+    start_date: Optional[date] = Field(None, alias="startDate", description="Start date")
+    end_date: Optional[date] = Field(None, alias="endDate", description="End date")
     highlights: List[str] = Field(default_factory=list, description="Key highlights")
+
+    class Config:
+        populate_by_name = True
 
 
 class GenerateItineraryRequest(BaseModel):

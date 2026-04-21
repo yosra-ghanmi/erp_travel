@@ -55,12 +55,28 @@ class SecureBCClient:
     SALESPERSON_CODE_FIELD = "agent_code"
     AGENCY_ID_FIELD = "agency_id"
 
+    # ROLE-BASED ACCESS CONTROL (RBAC)
+    # ---------------------------------------------------------
     # Functional Access Mapping (Authorized entities per role)
     ROLE_PERMISSIONS = {
         ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses"],
         ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses"], # Financial entities only
         ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff"],
         ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations"]
+    }
+
+    # Action Restrictions (Deny specific actions for specific roles)
+    ROLE_ACTION_RESTRICTIONS = {
+        ROLE_ADMIN: {
+            "delete": ["agencies", "services"],
+            "create": ["services"],
+            "update": ["services"]
+        },
+        ROLE_AGENT: {
+            "delete": ["agencies", "services", "offers", "staff"],
+            "create": ["services", "offers"], # Agents still have read-only for these global types
+            "update": ["services", "offers"]
+        }
     }
 
     # Mapping of entity types to their BC API endpoints and filter fields
@@ -87,8 +103,7 @@ class SecureBCClient:
             "filter_field": "agency_code",
             "agent_field": "agent_code",
             "id_field": "quoteNo",
-            "writable_fields": ["quoteNo", "clientNo", "serviceCode", "quoteDate", "validUntilDate", "status",
-                               "discount_percent", "currencyCode", "agent_code", "agency_code"]
+            "writable_fields": ["quoteNo", "clientNo", "lineType", "serviceCode", "quantity", "numberOfNights", "quoteDate", "validUntilDate", "status","discount_percent", "currencyCode", "agent_code", "agency_code"]
         },
         "invoices": {
             "endpoint": "TravelInvoiceAPI",
@@ -118,9 +133,9 @@ class SecureBCClient:
             "endpoint": "TravelServiceAPI",
             "api_endpoint": "travelServices",
             "filter_field": "agency_code",
-            "agent_field": "agent_code",
+            "agent_field": None,
             "id_field": "code",
-            "writable_fields": ["code", "name", "destination", "serviceType", "price", "currencyCode", "agent_code", "agency_code"]
+            "writable_fields": ["code", "name", "serviceType", "price", "currencyCode", "location", "description", "imageUrl", "agency_code"]
         },
         "offers": {
             "endpoint": "TravelOfferAPI",
@@ -128,7 +143,7 @@ class SecureBCClient:
             "filter_field": "agency_code",
             "agent_field": "agent_code",
             "id_field": "id",
-            "writable_fields": ["id", "title", "destination", "summary", "durationDays", "price", "currencyCode", "agent_code", "agency_code"]
+            "writable_fields": ["id", "title", "destination", "summary", "durationDays", "price", "currencyCode", "startDate", "endDate", "agent_code", "agency_code"]
         },
         "expenses": {
             "endpoint": "TravelExpenseAPI",
@@ -144,7 +159,7 @@ class SecureBCClient:
             "filter_field": "agency_code",
             "agent_field": "agent_code",
             "id_field": "lineNo",
-            "writable_fields": ["quoteNo", "lineNo", "serviceCode", "quantity", "numberOfNights", "agent_code", "agency_code"]
+            "writable_fields": ["quoteNo", "lineNo", "lineType", "serviceCode", "quantity", "numberOfNights", "agent_code", "agency_code"]
         },
         "invoice_lines": {
             "endpoint": "TravelInvoiceLineAPI",
@@ -186,7 +201,6 @@ class SecureBCClient:
         # SECURITY VALIDATION
         if self.user_role in (self.ROLE_ADMIN, self.ROLE_AGENT) and not agency_id:
             raise AgencySECURITYError(f"Navigo SECURITY: Agency-level role '{self.user_role}' requires Agency_ID.")
-        
         if self.user_role == self.ROLE_AGENT and not user_id:
             raise AgencySECURITYError("Navigo SECURITY: Agent role requires User_ID for personal scope filtering.")
 
@@ -210,12 +224,13 @@ class SecureBCClient:
                 f"Navigo ACCESS DENIED: Role '{self.user_role}' is not authorized to access '{entity_type}'."
             )
 
-        # 2. Write Restriction: Only Superadmin can Create/Update/Delete Global entities (Services, Offers)
-        if action in ("create", "update", "delete") and entity_type in ("services", "offers"):
-            if self.user_role != self.ROLE_SUPERADMIN:
-                raise AgencySECURITYError(
-                    f"Navigo ACCESS DENIED: Only Superadmin can {action} {entity_type}. Agents and Admins have read-only access."
-                )
+        # 2. Functional Restrictions
+        restrictions = self.ROLE_ACTION_RESTRICTIONS.get(self.user_role, {})
+        restricted_entities = restrictions.get(action, [])
+        if entity_type in restricted_entities:
+            raise AgencySECURITYError(
+                f"Navigo ACCESS DENIED: Role '{self.user_role}' is not authorized to perform '{action}' on '{entity_type}'."
+            )
 
     def _auth(self):
         """Return the appropriate auth handler based on auth mode."""
@@ -443,10 +458,14 @@ class SecureBCClient:
                 return [result]
             
             # OData list returns { "value": [...] }
-            return [{k.lower(): v for k, v in item.items()} for item in data.get("value", [])]
+            results = [{k.lower(): v for k, v in item.items()} for item in data.get("value", [])]
+            if entity_id and not results:
+                raise Exception(f"404 Not Found: {entity_type} {entity_id}")
+            return results
         except Exception as e:
             if isinstance(e, AgencySECURITYError): raise e
-            odata_error = str(e)
+            if "404 Not Found" in str(e): odata_error = str(e)
+            else: odata_error = str(e)
             logger.warning(f"OData GET failed for {entity_type}, trying API endpoint: {odata_error}")
 
         # Fallback to API endpoint
@@ -484,9 +503,13 @@ class SecureBCClient:
             r.raise_for_status()
             
             data = r.json()
-            return [{k.lower(): v for k, v in item.items()} for item in data.get("value", [])]
+            results = [{k.lower(): v for k, v in item.items()} for item in data.get("value", [])]
+            if entity_id and not results:
+                raise Exception(f"404 Not Found: {entity_type} {entity_id}")
+            return results
         except Exception as e2:
             if isinstance(e2, AgencySECURITYError): raise e2
+            if "404 Not Found" in str(e2): raise e2
             raise Exception(f"SECURE GET Failed for {entity_type}. OData: {odata_error}, API: {e2}")
 
     def secure_create(
