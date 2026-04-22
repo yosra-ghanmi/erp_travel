@@ -7,6 +7,7 @@ import {
   MoonStar,
   Search,
   UserRound,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { tFor, getDir } from "../i18n";
@@ -28,6 +29,8 @@ export function Layout({
   homePath,
   sessionEmail,
   onLogout,
+  searchQuery,
+  onSearchChange,
   children,
 }) {
   const [openProfileMenu, setOpenProfileMenu] = useState(false);
@@ -80,7 +83,7 @@ export function Layout({
               </span>
             </Link>
             {agencyName ? (
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-500 dark:text-slate-300">
                 {agencyName}
               </p>
             ) : null}
@@ -91,8 +94,8 @@ export function Layout({
                   onClick={() => onNavigate(module.key)}
                   className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
                     activeModule === module.key
-                      ? "bg-cyan-100 text-cyan-800 dark:bg-blue-900/40 dark:text-cyan-300"
-                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      ? "bg-cyan-100 text-cyan-800 dark:bg-blue-900/40 dark:text-cyan-200"
+                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                   }`}
                 >
                   <module.icon className="h-4 w-4" />
@@ -102,7 +105,7 @@ export function Layout({
             </nav>
           </div>
           {role === "superadmin" ? (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-300">
               {t("account.powered_by")}
             </p>
           ) : null}
@@ -122,15 +125,25 @@ export function Layout({
                   <input
                     type="text"
                     placeholder={t("header.search_placeholder")}
-                    className="w-full rounded-xl border border-slate-200 bg-white/70 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
+                    value={searchQuery || ""}
+                    onChange={(e) => onSearchChange?.(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white/70 py-2 pl-9 pr-10 text-sm text-slate-700 outline-none transition focus:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => onSearchChange?.("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div ref={languageRef} className="relative">
                   <button
                     onClick={() => setIsLanguageOpen((prev) => !prev)}
-                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                     aria-label="Toggle language"
                   >
                     <Globe2 className="h-4 w-4" />
@@ -147,7 +160,7 @@ export function Layout({
                           className={`w-full rounded-lg px-2 py-1 text-left text-xs transition ${
                             language === item.value
                               ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white"
-                              : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                              : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                           }`}
                         >
                           {item.label}
@@ -158,7 +171,7 @@ export function Layout({
                 </div>
                 <button
                   onClick={onToggleDarkMode}
-                  className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   aria-label="Toggle theme"
                 >
                   <MoonStar className="h-4 w-4" />
@@ -166,7 +179,7 @@ export function Layout({
                 <div ref={notificationsRef} className="relative">
                   <button
                     onClick={() => setIsNotificationsOpen((prev) => !prev)}
-                    className="relative rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className="relative rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                     aria-label="Notifications"
                   >
                     <Bell className="h-4 w-4" />
@@ -231,20 +244,20 @@ export function Layout({
                     onClick={() => setOpenProfileMenu((prev) => !prev)}
                     className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900"
                   >
-                    <UserRound className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+                    <UserRound className="h-4 w-4 text-slate-500 dark:text-slate-200" />
                     <div className="text-left">
-                      <p className="max-w-[130px] truncate text-xs text-slate-600 dark:text-slate-300">
+                      <p className="max-w-[130px] truncate text-xs text-slate-600 dark:text-slate-200">
                         {sessionEmail}
                       </p>
-                      <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-300">
                         {t("account.account")}
                       </p>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-200" />
                   </button>
                   {openProfileMenu ? (
                     <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-slate-900">
-                      <p className="rounded-lg px-2 py-2 text-xs text-slate-500 dark:text-slate-400">
+                      <p className="rounded-lg px-2 py-2 text-xs text-slate-500 dark:text-slate-300">
                         {sessionEmail}
                       </p>
                       <p className="rounded-lg px-2 pb-2 text-xs font-medium uppercase text-cyan-700 dark:text-cyan-400">

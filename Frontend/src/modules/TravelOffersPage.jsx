@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, X } from "lucide-react";
+import { Loader2, Plus, Trash2, X, Edit2 } from "lucide-react";
 import {
   generateItinerary,
   syncOffers,
   createTravelOffer,
   deleteTravelOffer,
+  updateTravelOffer, // Ensure this is imported
 } from "../services/erpApi";
 
-export function TravelOffersPage({ role }) {
+export function TravelOffersPage({ role, searchQuery }) {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeId, setActiveId] = useState(null);
   const [plan, setPlan] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingOffer, setEditingOffer] = useState(null);
   const [newOffer, setNewOffer] = useState({
     title: "",
     destination: "",
@@ -21,10 +23,25 @@ export function TravelOffersPage({ role }) {
     duration_days: 7,
     price: 0,
     currency: "USD",
+    startDate: "2026-01-15",
+    endDate: "2026-02-15",
     highlights: [],
   });
 
   const isSuperAdmin = role === "superadmin";
+
+  const filteredOffers = useMemo(() => {
+    if (!searchQuery) return offers;
+    const q = searchQuery.toLowerCase();
+    return offers.filter((offer) => {
+      const title = String(offer.title || "").toLowerCase();
+      const destination = String(offer.destination || "").toLowerCase();
+      const summary = String(offer.summary || "").toLowerCase();
+      return (
+        title.includes(q) || destination.includes(q) || summary.includes(q)
+      );
+    });
+  }, [offers, searchQuery]);
 
   const load = async () => {
     try {
@@ -47,12 +64,17 @@ export function TravelOffersPage({ role }) {
     e.preventDefault();
     try {
       setLoading(true);
-      const offerToCreate = {
-        ...newOffer,
-        id: `OFFER-${Date.now()}`,
-      };
-      await createTravelOffer(offerToCreate);
+      if (editingOffer) {
+        await updateTravelOffer(editingOffer.id, newOffer);
+      } else {
+        const offerToCreate = {
+          ...newOffer,
+          id: `OFFER-${Date.now()}`,
+        };
+        await createTravelOffer(offerToCreate);
+      }
       setShowAddForm(false);
+      setEditingOffer(null);
       setNewOffer({
         title: "",
         destination: "",
@@ -60,14 +82,36 @@ export function TravelOffersPage({ role }) {
         duration_days: 7,
         price: 0,
         currency: "USD",
+        startDate: "2026-01-15",
+        endDate: "2026-02-15",
         highlights: [],
       });
       await load();
     } catch (err) {
-      setError("Failed to create travel offer.");
+      setError(
+        editingOffer
+          ? "Failed to update travel offer."
+          : "Failed to create travel offer."
+      );
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditOffer = (offer) => {
+    setEditingOffer(offer);
+    setNewOffer({
+      title: offer.title,
+      destination: offer.destination,
+      summary: offer.summary,
+      duration_days: offer.duration_days || offer.durationDays,
+      price: offer.price,
+      currency: offer.currency || offer.currencyCode,
+      startDate: offer.startDate || offer.start_date,
+      endDate: offer.endDate || offer.end_date,
+      highlights: offer.highlights || [],
+    });
+    setShowAddForm(true);
   };
 
   const handleDeleteOffer = async (offerId) => {
@@ -77,9 +121,7 @@ export function TravelOffersPage({ role }) {
       await deleteTravelOffer(offerId);
       await load();
     } catch (err) {
-      setError(
-        "Failed to delete travel offer. Note: Only locally created offers can be deleted."
-      );
+      setError("Failed to delete travel offer.");
     } finally {
       setLoading(false);
     }
@@ -125,10 +167,24 @@ export function TravelOffersPage({ role }) {
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">
-              Create New Travel Offer
+              {editingOffer ? "Edit Travel Offer" : "Create New Travel Offer"}
             </h2>
             <button
-              onClick={() => setShowAddForm(false)}
+              onClick={() => {
+                setShowAddForm(false);
+                setEditingOffer(null);
+                setNewOffer({
+                  title: "",
+                  destination: "",
+                  summary: "",
+                  duration_days: 7,
+                  price: 0,
+                  currency: "USD",
+                  startDate: "2026-01-15",
+                  endDate: "2026-02-15",
+                  highlights: [],
+                });
+              }}
               className="text-slate-400 hover:text-slate-600"
             >
               <X className="h-5 w-5" />
@@ -236,11 +292,56 @@ export function TravelOffersPage({ role }) {
                   </select>
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newOffer.startDate}
+                    onChange={(e) =>
+                      setNewOffer({ ...newOffer, startDate: e.target.value })
+                    }
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-500 uppercase">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newOffer.endDate}
+                    onChange={(e) =>
+                      setNewOffer({ ...newOffer, endDate: e.target.value })
+                    }
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setShowAddForm(false)}
+                onClick={() => {
+                  setShowAddForm(false);
+                  setEditingOffer(null);
+                  setNewOffer({
+                    title: "",
+                    destination: "",
+                    summary: "",
+                    duration_days: 7,
+                    price: 0,
+                    currency: "USD",
+                    startDate: "2026-01-15",
+                    endDate: "2026-02-15",
+                    highlights: [],
+                  });
+                }}
                 className="rounded-xl border border-slate-200 px-6 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
               >
                 Cancel
@@ -250,7 +351,13 @@ export function TravelOffersPage({ role }) {
                 disabled={loading}
                 className="rounded-xl bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {loading ? "Creating..." : "Create Offer"}
+                {loading
+                  ? editingOffer
+                    ? "Updating..."
+                    : "Creating..."
+                  : editingOffer
+                  ? "Update Offer"
+                  : "Create Offer"}
               </button>
             </div>
           </form>
@@ -269,21 +376,30 @@ export function TravelOffersPage({ role }) {
             <Loader2 className="h-4 w-4 animate-spin" />
             Syncing offers...
           </div>
-        ) : offers.length > 0 ? (
+        ) : filteredOffers.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {offers.map((offer) => (
+            {filteredOffers.map((offer) => (
               <div
                 key={offer.id}
                 className="group relative rounded-2xl border border-slate-200 bg-white p-4 hover:border-indigo-200 hover:shadow-md transition-all"
               >
                 {isSuperAdmin && String(offer.id).startsWith("OFFER-") && (
-                  <button
-                    onClick={() => handleDeleteOffer(offer.id)}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete local offer"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleEditOffer(offer)}
+                      className="text-slate-400 hover:text-indigo-600"
+                      title="Edit offer"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteOffer(offer.id)}
+                      className="text-slate-400 hover:text-rose-500"
+                      title="Delete local offer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-slate-900">
@@ -324,7 +440,9 @@ export function TravelOffersPage({ role }) {
         ) : (
           <div className="py-12 text-center">
             <p className="text-sm text-slate-500">
-              No travel offers available.
+              {searchQuery
+                ? `No travel offers found matching "${searchQuery}"`
+                : "No travel offers available."}
             </p>
             {isSuperAdmin && (
               <button

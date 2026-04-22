@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -19,10 +19,12 @@ import {
   sendEmail,
   fetchQuoteLines,
   deleteQuote,
+  syncOffers,
 } from "../services/erpApi";
 
 const initialForm = {
   clientNo: "",
+  lineType: "Service",
   serviceCode: "",
   serviceCodes: [], // For multiple services
   quantity: 1, // Number of Persons
@@ -34,16 +36,28 @@ const initialForm = {
   status: "Draft",
 };
 
-export function QuotesPage({ agencyId }) {
+export function QuotesPage({ agencyId, searchQuery }) {
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
+
+  const filteredQuotes = useMemo(() => {
+    if (!searchQuery) return quotes;
+    const q = searchQuery.toLowerCase();
+    return quotes.filter((quote) => {
+      const qNo = String(quote.quoteNo || "").toLowerCase();
+      const client = String(quote.clientName || "").toLowerCase();
+      const status = String(quote.status || "").toLowerCase();
+      return qNo.includes(q) || client.includes(q) || status.includes(q);
+    });
+  }, [quotes, searchQuery]);
 
   const normalize = (item, fields) => {
     const normalized = { ...item };
@@ -69,6 +83,7 @@ export function QuotesPage({ agencyId }) {
       clientNo: ["clientno", "client_no", "client_id"],
       clientName: ["clientname", "client_name", "name"],
       serviceCode: ["servicecode", "service_code"],
+      lineType: ["linetype", "line_type"],
       subtotal: ["subtotal", "sub_total"],
       discount_percent: [
         "discount_percent",
@@ -87,8 +102,8 @@ export function QuotesPage({ agencyId }) {
 
   const normalizeService = (s) =>
     normalize(s, {
-      serviceCode: ["code", "servicecode", "service_code"],
-      name: ["name", "servicename", "service_name"],
+      serviceCode: ["code", "servicecode", "service_code", "no", "id"],
+      name: ["name", "servicename", "service_name", "title"],
     });
 
   useEffect(() => {
@@ -99,9 +114,10 @@ export function QuotesPage({ agencyId }) {
           fetchQuotes(),
           fetchClients(),
           fetchServices(),
+          syncOffers(),
         ]);
 
-        const [qRes, cRes, sRes] = results;
+        const [qRes, cRes, sRes, oRes] = results;
 
         if (qRes.status === "fulfilled") {
           const normalizedQuotes = (qRes.value || []).map(normalizeQuote);
@@ -116,11 +132,24 @@ export function QuotesPage({ agencyId }) {
 
         if (cRes.status === "fulfilled") {
           setClients(cRes.value || []);
+        } else {
+          console.error("Clients fetch failed:", cRes.reason);
         }
 
         if (sRes.status === "fulfilled") {
           const normalizedServices = (sRes.value || []).map(normalizeService);
           setServices(normalizedServices);
+        } else {
+          console.error("Services fetch failed:", sRes.reason);
+        }
+
+        if (oRes.status === "fulfilled") {
+          const normalizedOffers = (oRes.value?.offers || []).map(
+            normalizeService
+          );
+          setOffers(normalizedOffers);
+        } else {
+          console.error("Offers sync failed:", oRes.reason);
         }
       } catch (err) {
         console.error("Failed to load quotes data:", err);
@@ -143,6 +172,7 @@ export function QuotesPage({ agencyId }) {
       if (form.serviceCodes.length > 0) {
         quoteData.serviceCode = ""; // Clear singular if multiple are used
         quoteData.serviceItems = form.serviceCodes.map((code) => ({
+          lineType: form.lineType,
           serviceCode: code,
           quantity: form.quantity,
           numberOfNights: form.numberOfNights,
@@ -481,7 +511,7 @@ export function QuotesPage({ agencyId }) {
           )}
           <DataTable
             headers={["No.", "Client", "Amount", "Status", "Actions"]}
-            rows={quotes.map((quote) => {
+            rows={filteredQuotes.map((quote) => {
               const qNo = quote.quoteNo;
               const status = quote.status || "Draft";
               return (
@@ -489,13 +519,15 @@ export function QuotesPage({ agencyId }) {
                   key={qNo}
                   className="border-b border-slate-100 dark:border-slate-800"
                 >
-                  <td className="px-2 py-3 text-xs font-mono">{qNo}</td>
-                  <td className="px-2 py-3">
+                  <td className="px-2 py-3 text-xs font-mono text-slate-500 dark:text-slate-400">
+                    {qNo}
+                  </td>
+                  <td className="px-2 py-3 text-slate-700 dark:text-slate-200">
                     {quote.clientName ||
                       clients.find((c) => c.id === quote.clientNo)?.name ||
                       quote.clientNo}
                   </td>
-                  <td className="px-2 py-3 font-bold">
+                  <td className="px-2 py-3 font-bold text-slate-900 dark:text-white">
                     {quote.totalAmount || 0} {quote.currencyCode || "USD"}
                   </td>
                   <td className="px-2 py-3">
@@ -570,7 +602,7 @@ export function QuotesPage({ agencyId }) {
       </div>
       <Panel title="Create New Quote">
         <div className="space-y-3">
-          <label className="text-[10px] uppercase font-bold text-slate-400">
+          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
             Client Search
           </label>
           <Input
@@ -599,11 +631,37 @@ export function QuotesPage({ agencyId }) {
               ))}
           </Select>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400">
-            Service Search
+          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+            Line Type
+          </label>
+          <div className="flex gap-2">
+            <Button
+              variant={form.lineType === "Service" ? "primary" : "ghost"}
+              size="sm"
+              onClick={() =>
+                setForm((prev) => ({ ...prev, lineType: "Service" }))
+              }
+              className="flex-1"
+            >
+              Service
+            </Button>
+            <Button
+              variant={form.lineType === "Offer" ? "primary" : "ghost"}
+              size="sm"
+              onClick={() =>
+                setForm((prev) => ({ ...prev, lineType: "Offer" }))
+              }
+              className="flex-1"
+            >
+              Offer
+            </Button>
+          </div>
+
+          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+            {form.lineType} Search
           </label>
           <Input
-            placeholder="Search service..."
+            placeholder={`Search ${form.lineType.toLowerCase()}...`}
             value={serviceSearch}
             onChange={(e) => setServiceSearch(e.target.value)}
           />
@@ -619,7 +677,7 @@ export function QuotesPage({ agencyId }) {
             }}
             className="h-24"
           >
-            {services
+            {(form.lineType === "Service" ? services : offers)
               .filter(
                 (s) =>
                   s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
@@ -633,13 +691,13 @@ export function QuotesPage({ agencyId }) {
                 </option>
               ))}
           </Select>
-          <p className="text-[9px] text-slate-400 italic">
+          <p className="text-[9px] text-slate-400 dark:text-slate-300 italic">
             Hold Ctrl/Cmd to select multiple
           </p>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-400">
+              <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
                 Persons
               </label>
               <Input
@@ -655,7 +713,7 @@ export function QuotesPage({ agencyId }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-400">
+              <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
                 Nights
               </label>
               <Input
@@ -672,7 +730,7 @@ export function QuotesPage({ agencyId }) {
             </div>
           </div>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400">
+          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
             Discount
           </label>
           <Select
@@ -691,7 +749,7 @@ export function QuotesPage({ agencyId }) {
             <option value="15">15% Discount (Max)</option>
           </Select>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400">
+          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
             Quote Date
           </label>
           <Input
@@ -702,7 +760,7 @@ export function QuotesPage({ agencyId }) {
             }
           />
 
-          <label className="text-[10px] uppercase font-bold text-slate-400">
+          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
             Valid Until
           </label>
           <Input

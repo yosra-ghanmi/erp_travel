@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { BarChart3, CalendarClock, Users2, Wallet } from "lucide-react";
 import {
   Bar,
@@ -18,7 +19,17 @@ export function DashboardPage({
   payments,
   revenueSeries,
   activityFeed,
+  searchQuery,
 }) {
+  const filteredActivity = useMemo(() => {
+    if (!searchQuery) return activityFeed;
+    const q = searchQuery.toLowerCase();
+    return activityFeed.filter((activity) => {
+      const msg = (activity.message || "").toLowerCase();
+      const at = (activity.at || "").toLowerCase();
+      return msg.includes(q) || at.includes(q);
+    });
+  }, [activityFeed, searchQuery]);
   // Use payments for total revenue calculation if available, otherwise fallback to bookings amount
   const revenue =
     payments?.length > 0
@@ -109,19 +120,25 @@ export function DashboardPage({
         </Panel>
         <Panel title="Recent Activity Feed">
           <div className="space-y-3">
-            {activityFeed.map((activity) => (
-              <div
-                key={activity.id}
-                className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800"
-              >
-                <p className="font-medium text-slate-700 dark:text-slate-200">
-                  {activity.message}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {activity.at}
-                </p>
-              </div>
-            ))}
+            {filteredActivity.length > 0 ? (
+              filteredActivity.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800"
+                >
+                  <p className="font-medium text-slate-700 dark:text-slate-200">
+                    {activity.message}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {activity.at}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-center text-xs text-slate-500">
+                No matching activities found.
+              </p>
+            )}
           </div>
         </Panel>
       </div>

@@ -21,6 +21,7 @@ export const modulesByRole = {
       icon: LayoutDashboard,
     },
     { key: "manage_agencies", label: "Manage Agencies", icon: Building2 },
+    { key: "services", label: "Services", icon: Wrench },
     { key: "travel_offers", label: "Travel Offers", icon: ClipboardList },
     { key: "ai_usage_logs", label: "AI Usage Logs", icon: BrainCircuit },
     { key: "system_settings", label: "System Settings", icon: Settings },

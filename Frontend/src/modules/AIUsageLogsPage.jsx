@@ -1,13 +1,26 @@
 import { useMemo, useState } from 'react'
 import { Card, DataTable, Panel, Select } from '../components/ui'
 
-export function AIUsageLogsPage({ logs, agencies }) {
+export function AIUsageLogsPage({ logs, agencies, searchQuery }) {
   const [agencyFilter, setAgencyFilter] = useState('all')
 
-  const filteredLogs = useMemo(
-    () => logs.filter((log) => agencyFilter === 'all' || log.agency_id === agencyFilter),
-    [logs, agencyFilter],
-  )
+  const filteredLogs = useMemo(() => {
+    let list = logs.filter(
+      (log) => agencyFilter === "all" || log.agency_id === agencyFilter
+    );
+
+    if (!searchQuery) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter((log) => {
+      const agency = agencies.find((a) => a.id === log.agency_id);
+      const agencyName = String(agency?.name || "").toLowerCase();
+      const user = String(log.user || "").toLowerCase();
+      const at = String(log.at || "").toLowerCase();
+      return (
+        agencyName.includes(q) || user.includes(q) || at.includes(q)
+      );
+    });
+  }, [logs, agencyFilter, searchQuery, agencies]);
 
   const totalApiCost = filteredLogs.reduce((sum, log) => sum + log.cost, 0)
   const totalTokens = filteredLogs.reduce((sum, log) => sum + log.promptTokens, 0)

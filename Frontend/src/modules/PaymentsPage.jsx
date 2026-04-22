@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -27,7 +27,7 @@ const initialForm = {
   date: "2026-01-15",
 };
 
-export function PaymentsPage() {
+export function PaymentsPage({ searchQuery }) {
   const [payments, setPayments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
@@ -35,6 +35,17 @@ export function PaymentsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const filteredInvoices = useMemo(() => {
+    if (!searchQuery) return invoices;
+    const q = searchQuery.toLowerCase();
+    return invoices.filter((inv) => {
+      const iNo = String(inv.invoiceNo || "").toLowerCase();
+      const client = String(inv.clientName || "").toLowerCase();
+      const status = String(inv.status || "").toLowerCase();
+      return iNo.includes(q) || client.includes(q) || status.includes(q);
+    });
+  }, [invoices, searchQuery]);
 
   const normalize = (item, fields) => {
     const normalized = { ...item };
@@ -333,7 +344,7 @@ export function PaymentsPage() {
                 "Status",
                 "Actions",
               ]}
-              rows={invoices.map((inv) => {
+              rows={filteredInvoices.map((inv) => {
                 const iNo = inv.invoiceNo;
                 return (
                   <tr

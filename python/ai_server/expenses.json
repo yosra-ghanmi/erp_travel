@@ -1,0 +1,38 @@
+[
+  {
+    "expenseId": "EXP-SEED-001",
+    "sourceInvoiceId": "INV-1021",
+    "recipientId": "HOTEL-PARIS",
+    "expenseType": "Provider Payout",
+    "amount": 1275.0,
+    "date": "2026-01-15",
+    "description": "85% Payout for Hotel Le Meurice (INV-1021)",
+    "status": "Synchronized",
+    "agent_code": "AGENT-001",
+    "agency_code": "NAVIGO"
+  },
+  {
+    "expenseId": "EXP-SEED-002",
+    "sourceInvoiceId": "INV-1021",
+    "recipientId": "AGENT-001",
+    "expenseType": "Agent Commission",
+    "amount": 100.0,
+    "date": "2026-01-20",
+    "description": "5% Agent Commission for Invoice INV-1021",
+    "status": "Synchronized",
+    "agent_code": "AGENT-001",
+    "agency_code": "NAVIGO"
+  },
+  {
+    "expenseId": "EXP-SEED-003",
+    "sourceInvoiceId": "INV-1022",
+    "recipientId": "ACTIVITY-TOUR",
+    "expenseType": "Provider Payout",
+    "amount": 425.0,
+    "date": "2026-01-22",
+    "description": "85% Payout for Eiffel Tower Tour (INV-1022)",
+    "status": "Pending",
+    "agent_code": "AGENT-001",
+    "agency_code": "NAVIGO"
+  }
+]

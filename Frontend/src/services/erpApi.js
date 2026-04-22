@@ -47,6 +47,11 @@ export const deleteTravelOffer = async (offerId) => {
   return data;
 };
 
+export const updateTravelOffer = async (offerId, offerData) => {
+  const { data } = await api.patch(`/api/travel-offers/${offerId}`, offerData);
+  return data;
+};
+
 // Agency AdminClients
 export const fetchClients = async () => {
   const { data } = await api.get("/api/clients");
@@ -88,6 +93,11 @@ export const fetchExpenses = async () => {
 
 export const createExpense = async (expenseData) => {
   const { data } = await api.post("/api/expenses", expenseData);
+  return data;
+};
+
+export const syncExpensesFromInvoices = async () => {
+  const { data } = await api.post("/api/expenses/sync-invoices");
   return data;
 };
 

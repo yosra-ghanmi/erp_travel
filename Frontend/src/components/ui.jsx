@@ -2,7 +2,7 @@ export function Card({ title, value, hint, icon: Icon }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-300">{title}</p>
         {Icon ? (
           <Icon className="h-5 w-5 text-brand-600 dark:text-brand-500" />
         ) : null}
@@ -64,7 +64,7 @@ export function StatusBadge({ value }) {
 export function Input({ className = "", ...props }) {
   return (
     <input
-      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-brand-500 transition focus:ring-2 dark:border-slate-700 dark:bg-slate-950 ${className}`}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-brand-500 transition focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 ${className}`}
       {...props}
     />
   );
@@ -73,7 +73,7 @@ export function Input({ className = "", ...props }) {
 export function Select({ className = "", ...props }) {
   return (
     <select
-      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-brand-500 transition focus:ring-2 dark:border-slate-700 dark:bg-slate-950 ${className}`}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-brand-500 transition focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 ${className}`}
       {...props}
     />
   );
@@ -107,7 +107,7 @@ export function DataTable({ headers, rows }) {
             {headers.map((header) => (
               <th
                 key={header}
-                className="px-2 py-3 font-medium text-slate-500 dark:text-slate-400"
+                className="px-2 py-3 font-medium text-slate-500 dark:text-slate-300"
               >
                 {header}
               </th>

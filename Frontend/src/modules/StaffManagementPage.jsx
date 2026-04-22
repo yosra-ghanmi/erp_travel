@@ -1,12 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, DataTable, Input, Panel, Select, StatusBadge } from '../components/ui'
 
 const blankStaff = { name: '', email: '', role: 'agent' }
 
-export function StaffManagementPage({ users, setUsers, agencyId }) {
+export function StaffManagementPage({ users, setUsers, agencyId, searchQuery }) {
   const [form, setForm] = useState(blankStaff)
 
-  const staffMembers = users.filter((user) => user.agency_id === agencyId && user.role !== 'superadmin')
+  const staffMembers = useMemo(() => {
+    const list = users.filter((user) => user.agency_id === agencyId && user.role !== 'superadmin')
+    if (!searchQuery) return list
+    const q = searchQuery.toLowerCase()
+    return list.filter((user) => 
+      user.name.toLowerCase().includes(q) || 
+      user.email.toLowerCase().includes(q) || 
+      user.role.toLowerCase().includes(q)
+    )
+  }, [users, agencyId, searchQuery])
 
   const inviteStaff = () => {
     if (!form.name || !form.email) return

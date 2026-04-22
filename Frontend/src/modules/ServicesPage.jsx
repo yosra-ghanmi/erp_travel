@@ -7,6 +7,7 @@ import {
   Select,
   StatusBadge,
 } from "../components/ui";
+import { Wrench } from "lucide-react";
 import {
   createReservation,
   createService,
@@ -15,7 +16,15 @@ import {
   fetchServices,
 } from "../services/erpApi";
 
-const blankService = { name: "", category: "Transfer", price: 0, active: true };
+const blankService = {
+  name: "",
+  category: "Activity",
+  price: 0,
+  active: true,
+  location: "",
+  description: "",
+  imageUrl: "",
+};
 
 export function ServicesPage({
   role,
@@ -27,6 +36,8 @@ export function ServicesPage({
   users,
   clients,
   hasPermission,
+  pushNotification,
+  searchQuery,
 }) {
   const [form, setForm] = useState(blankService);
   const [editingId, setEditingId] = useState("");
@@ -53,6 +64,9 @@ export function ServicesPage({
             price: Number(s.price) || 0,
             active: true,
             agency_id: agencyId,
+            location: s.location || "",
+            description: s.description || "",
+            imageUrl: s.image_url || "",
           }));
           setServices(mapped);
         }
@@ -85,7 +99,35 @@ export function ServicesPage({
       category: service.category,
       price: service.price,
       active: service.active,
+      location: service.location || "",
+      description: service.description || "",
+      imageUrl: service.imageUrl || "",
     });
+  };
+
+  const notifyAdmins = (message) => {
+    if (role !== "superadmin") return;
+
+    // In a real app, this would be handled by the backend pushing notifications.
+    // For this simulation, we'll update the localStorage for all admin users.
+    users
+      .filter((u) => u.role === "admin")
+      .forEach((admin) => {
+        const key = `erp_notifications_${admin.id}`;
+        const existing = JSON.parse(localStorage.getItem(key) || "[]");
+        const newNotif = {
+          id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          message,
+          read: false,
+        };
+        localStorage.setItem(
+          key,
+          JSON.stringify([newNotif, ...existing].slice(0, 8))
+        );
+      });
+
+    // Also notify current session (if superadmin wants to see their own updates in notifications)
+    if (pushNotification) pushNotification(message);
   };
 
   const saveService = async () => {
@@ -103,7 +145,9 @@ export function ServicesPage({
               : service
           )
         );
+        const msg = `Service ${form.name} updated by Superadmin`;
         setMessage("Service updated successfully");
+        notifyAdmins(msg);
       } else {
         // Real creation in Business Central
         const payload = {
@@ -111,6 +155,8 @@ export function ServicesPage({
           serviceType: form.category,
           price: Number(form.price),
           currencyCode: "USD",
+          location: form.location,
+          description: form.description,
         };
         const result = await createService(payload);
         const newService = {
@@ -120,13 +166,19 @@ export function ServicesPage({
           price: Number(form.price),
         };
         setServices((prev) => [...prev, newService]);
+        const msg = `New service ${form.name} created by Superadmin`;
         setMessage("Service created successfully in Business Central");
+        notifyAdmins(msg);
       }
       setEditingId("");
       setForm(blankService);
     } catch (err) {
       console.error("BC Save failed:", err);
-      setError("Failed to save to Business Central. Service added locally.");
+      const errorMsg =
+        err.response?.data?.detail || err.message || "Unknown error";
+      setError(
+        `Failed to save to Business Central: ${errorMsg}. Service added locally.`
+      );
       if (!editingId) {
         const fallbackId = `SV-${200 + (services?.length || 0) + 1}`;
         setServices((prev) => [
@@ -138,6 +190,8 @@ export function ServicesPage({
             price: Number(form.price),
           },
         ]);
+        const msg = `New service ${form.name} created locally (BC Sync failed)`;
+        notifyAdmins(msg);
       }
     } finally {
       setLoading(false);
@@ -149,25 +203,41 @@ export function ServicesPage({
     try {
       await deleteService(serviceId);
       setServices((prev) => prev.filter((service) => service.id !== serviceId));
+      const msg = `Service ${serviceId} deleted by Superadmin`;
       setMessage(`Service ${serviceId} deleted from Business Central`);
+      notifyAdmins(msg);
     } catch (err) {
       console.error("BC Delete failed:", err);
       setError(
         "Failed to delete from Business Central. Service removed locally."
       );
       setServices((prev) => prev.filter((service) => service.id !== serviceId));
+      const msg = `Service ${serviceId} removed locally (BC Sync failed)`;
+      notifyAdmins(msg);
     }
   };
 
   const agencyServices = useMemo(() => {
-    if (!services || !Array.isArray(services)) return [];
-    return services.filter((service) => service.agency_id === agencyId);
-  }, [services, agencyId]);
+    let list = services || [];
+    if (role !== "superadmin") {
+      list = list.filter((service) => service.agency_id === agencyId);
+    }
+    if (!searchQuery) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(
+      (s) =>
+        s.name?.toLowerCase().includes(q) ||
+        s.category?.toLowerCase().includes(q) ||
+        s.id?.toLowerCase().includes(q) ||
+        s.location?.toLowerCase().includes(q)
+    );
+  }, [services, agencyId, role, searchQuery]);
 
   const agencyUsage = useMemo(() => {
     if (!serviceUsage || !Array.isArray(serviceUsage)) return [];
+    if (role === "superadmin") return serviceUsage;
     return serviceUsage.filter((usage) => usage.agency_id === agencyId);
-  }, [serviceUsage, agencyId]);
+  }, [serviceUsage, agencyId, role]);
 
   const assignService = async (serviceId) => {
     if (!hasPermission("services", "use") || !selectedClientId) return;
@@ -248,10 +318,27 @@ export function ServicesPage({
                 className="border-b border-slate-100 dark:border-slate-800"
               >
                 <td className="px-2 py-3">
-                  <p className="font-medium text-slate-900 dark:text-white">
-                    {service.name}
-                  </p>
-                  <p className="text-xs text-slate-500">{service.id}</p>
+                  <div className="flex items-center gap-3">
+                    {service.imageUrl ? (
+                      <img
+                        src={service.imageUrl}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                        <Wrench className="h-5 w-5 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900 dark:text-white truncate">
+                        {service.name}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {service.id}
+                      </p>
+                    </div>
+                  </div>
                 </td>
                 <td className="px-2 py-3">{service.category}</td>
                 <td className="px-2 py-3">${service.price}</td>
@@ -302,23 +389,85 @@ export function ServicesPage({
                 setForm((prev) => ({ ...prev, name: event.target.value }))
               }
             />
-            <Select
-              value={form.category}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, category: event.target.value }))
-              }
-            >
-              <option value="Transfer">Transfer</option>
-              <option value="Documentation">Documentation</option>
-              <option value="Insurance">Insurance</option>
-              <option value="Comfort">Comfort</option>
-            </Select>
+            <div className="flex flex-col gap-2 py-1">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                Category
+              </p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="serviceCategory"
+                    className="w-4 h-4 border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                    checked={form.category === "Activity"}
+                    onChange={() =>
+                      setForm((prev) => ({ ...prev, category: "Activity" }))
+                    }
+                  />
+                  <span
+                    className={
+                      form.category === "Activity"
+                        ? "text-slate-900 font-medium dark:text-white"
+                        : "text-slate-500 dark:text-slate-400"
+                    }
+                  >
+                    Activity
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="serviceCategory"
+                    className="w-4 h-4 border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                    checked={form.category === "Hotel"}
+                    onChange={() =>
+                      setForm((prev) => ({ ...prev, category: "Hotel" }))
+                    }
+                  />
+                  <span
+                    className={
+                      form.category === "Hotel"
+                        ? "text-slate-900 font-medium dark:text-white"
+                        : "text-slate-500 dark:text-slate-400"
+                    }
+                  >
+                    Hotel
+                  </span>
+                </label>
+              </div>
+            </div>
             <Input
               type="number"
               placeholder="Price"
               value={form.price}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, price: event.target.value }))
+              }
+            />
+            <Input
+              placeholder="Location"
+              value={form.location}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, location: event.target.value }))
+              }
+            />
+            <textarea
+              placeholder="Service description"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              rows={3}
+              value={form.description}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+            />
+            <Input
+              placeholder="Image URL"
+              value={form.imageUrl}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, imageUrl: event.target.value }))
               }
             />
             <label className="flex items-center gap-2 text-sm">

@@ -1,3 +1,4 @@
+from enum import Enum
 from datetime import date
 from typing import List, Optional
 from pydantic import BaseModel, Field
@@ -56,19 +57,42 @@ class PaymentCreate(BaseModel):
     payment_date: date = Field(..., alias="date")
 
 
+class ExpenseType(str, Enum):
+    PROVIDER_PAYOUT = "Provider Payout"
+    AGENT_COMMISSION = "Agent Commission"
+    MANUAL = "Manual"
+    HOTEL = "Hotel"
+    TRANSPORT = "Transport"
+    FLIGHTS = "Flights"
+    MARKETING = "Marketing"
+    STAFF = "Staff"
+    OTHER = "Other"
+
+
 class Expense(BaseModel):
-    expenseId: str
-    type: str  # Hotel, Transport, etc.
+    expense_id: Optional[str] = Field(None, alias="expenseId")
+    source_invoice_id: Optional[str] = Field(None, alias="sourceInvoiceId")
+    recipient_id: str = Field(..., alias="recipientId", description="Agent or Hotel/Provider ID")
+    expense_type: ExpenseType = Field(..., alias="expenseType")
     amount: float
-    expense_date: date = Field(..., alias="date")
+    expense_date: date = Field(default_factory=date.today, alias="date")
     description: Optional[str] = None
+    status: str = Field("Pending", description="Pending, Synchronized, Failed")
+
+    class Config:
+        populate_by_name = True
 
 
 class ExpenseCreate(BaseModel):
-    type: str
+    source_invoice_id: Optional[str] = Field(None, alias="sourceInvoiceId")
+    recipient_id: str = Field(..., alias="recipientId")
+    expense_type: ExpenseType = Field(..., alias="expenseType")
     amount: float
-    expense_date: date = Field(..., alias="date")
+    expense_date: date = Field(default_factory=date.today, alias="date")
     description: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
 
 
 class TravelService(BaseModel):
@@ -184,7 +208,7 @@ class TravelInvoice(BaseModel):
     invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
     quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
     service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
-    client_no: str = Field(..., alias="clientNo", description="Client number")
+    client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
     client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
     invoice_date: Optional[date] = Field(None, alias="invoiceDate", description="Invoice date")
     due_date: Optional[date] = Field(None, alias="dueDate", description="Due date")

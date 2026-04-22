@@ -40,6 +40,7 @@ from mailing import send_email_with_attachment
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
 from secure_bc_client import SecureBCClient, get_secure_bc_client
 from user_sync_service import AgencyAdminSyncService
+from expense_service import ExpenseService
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
@@ -97,6 +98,7 @@ def health_check():
 AGENCIES_FILE = os.path.join(os.path.dirname(__file__), "agencies.json")
 USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
 OFFERS_FILE = os.path.join(os.path.dirname(__file__), "travel_offers.json")
+EXPENSES_FILE = os.path.join(os.path.dirname(__file__), "expenses.json")
 
 def _load_agencies() -> List[Dict]:
     if not os.path.exists(AGENCIES_FILE):
@@ -127,6 +129,23 @@ def _load_offers() -> List[Dict]:
 def _save_offers(offers: List[Dict]):
     with open(OFFERS_FILE, "w") as f:
         json.dump(offers, f, indent=2)
+
+def _load_expenses() -> List[Dict]:
+    if not os.path.exists(EXPENSES_FILE):
+        return []
+    try:
+        with open(EXPENSES_FILE, "r") as f:
+            content = f.read()
+            if not content:
+                return []
+            return json.loads(content)
+    except Exception as e:
+        logger.error(f"Error loading expenses: {e}")
+        return []
+
+def _save_expenses(expenses: List[Dict]):
+    with open(EXPENSES_FILE, "w") as f:
+        json.dump(expenses, f, indent=2)
 
 @app.get("/api/users")
 def get_users():
@@ -283,6 +302,7 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
         if not payload.get("paymentId"):
             payload["paymentId"] = f"PAY-{int(time.time())}"
         return client.secure_create("payments", payload)
+
     except Exception as e:
         logger.error(f"Error creating payment in BC: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -292,9 +312,20 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
 
 @app.get("/api/expenses")
 def get_expenses(client: SecureBCClient = Depends(get_secure_bc_client)):
+    """
+    Returns a unified list of manual expenses, provider payouts, and agent commissions.
+    """
     try:
-        expenses = client.secure_get("expenses")
-        return {"expenses": expenses}
+        # Load local expenses (payouts and commissions calculated)
+        local_expenses = _load_expenses()
+        
+        # Optionally fetch manual expenses from BC if they exist there
+        try:
+            bc_expenses = client.secure_get("expenses")
+        except:
+            bc_expenses = []
+            
+        return {"expenses": local_expenses + bc_expenses}
     except Exception as e:
         logger.error(f"Error fetching expenses: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -304,17 +335,114 @@ def get_expenses(client: SecureBCClient = Depends(get_secure_bc_client)):
 def create_expense(expense: ExpenseCreate, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
         expense_id = f"EXP-{int(time.time())}"
-        payload = {
-            "expenseId": expense_id,
-            "type": expense.type,
-            "amount": expense.amount,
-            "date": expense.date.isoformat(),
-            "description": expense.description
-        }
-        return client.secure_create("expenses", payload)
+        expense_dict = expense.dict(by_alias=True)
+        expense_dict["expenseId"] = expense_id
+        expense_dict["status"] = "Pending"
+        
+        # Save locally
+        expenses = _load_expenses()
+        expenses.append(expense_dict)
+        _save_expenses(expenses)
+        
+        # Try to sync with BC
+        try:
+            bc_data = client.secure_create("expenses", expense_dict)
+            expense_dict["status"] = "Synchronized"
+            _save_expenses(expenses)
+            return bc_data
+        except Exception as bc_err:
+            logger.warning(f"Failed to sync expense to BC: {bc_err}")
+            return expense_dict
+            
     except Exception as e:
-        logger.error(f"Error creating expense in BC: {e}")
+        logger.error(f"Error creating expense: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/expenses/sync-invoices")
+def sync_expenses_from_invoices(client: SecureBCClient = Depends(get_secure_bc_client)):
+    """
+    Triggers the calculation logic:
+    1. Provider Payout (85% Rule) on all invoices.
+    2. Agent Commission (5% Rule) on "Paid" invoices > 1000.
+    """
+    try:
+        logger.info("Starting expense sync from invoices...")
+        invoices_raw = client.secure_get("invoices")
+        invoices = [TravelInvoice(**inv) for inv in invoices_raw]
+        logger.info(f"Fetched {len(invoices)} invoices from BC.")
+        
+        all_expenses = _load_expenses()
+        new_expenses_count = 0
+        
+        for inv in invoices:
+            # 1. Provider Payout (85% Rule) - Triggered when service is invoiced
+            if inv.service_code:
+                # Check if payout already exists for this invoice
+                exists = any(e.get("sourceInvoiceId") == inv.invoice_no and e.get("expenseType") == "Provider Payout" for e in all_expenses)
+                if not exists:
+                    # Fetch service details to get the price
+                    try:
+                        # Corrected: pass entity_id as second argument
+                        service_results = client.secure_get("services", inv.service_code)
+                        if service_results:
+                            service_data = service_results[0]
+                            service = TravelService(**service_data)
+                            payout = ExpenseService.calculate_provider_payout(service, inv.invoice_no)
+                            all_expenses.append(payout.dict(by_alias=True))
+                            new_expenses_count += 1
+                        else:
+                            logger.warning(f"Service {inv.service_code} not found for payout calculation")
+                    except Exception as serv_err:
+                        logger.warning(f"Could not fetch service {inv.service_code}: {serv_err}")
+
+            # 2. Agent Commission (5% Rule) - Triggered when Paid and > 1000
+            if inv.status == "Paid" and (inv.total_amount or 0) > 1000:
+                exists = any(e.get("sourceInvoiceId") == inv.invoice_no and e.get("expenseType") == "Agent Commission" for e in all_expenses)
+                if not exists:
+                    # In this demo, we'll assign to a default agent if not specified
+                    agent_id = "AGENT-001" 
+                    commission = ExpenseService.calculate_agent_commission(inv, agent_id)
+                    if commission:
+                        all_expenses.append(commission.dict(by_alias=True))
+                        new_expenses_count += 1
+        
+        if new_expenses_count > 0:
+            _save_expenses(all_expenses)
+            logger.info(f"Created {new_expenses_count} new expense records.")
+            
+        return {
+            "status": "success", 
+            "message": f"Processed {len(invoices)} invoices. Created {new_expenses_count} new expense records.",
+            "total_expenses": len(all_expenses)
+        }
+    except Exception as e:
+        logger.error(f"Error syncing expenses from invoices: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@app.post("/api/bc-webhook")
+async def bc_webhook(request: Request, client: SecureBCClient = Depends(get_secure_bc_client)):
+    """
+    Webhook receiver for Business Central events.
+    When an invoice status changes, this can trigger the commission logic.
+    """
+    try:
+        payload = await request.json()
+        logger.info(f"Received BC Webhook: {payload}")
+        
+        # Example payload handling:
+        # { "entity": "TravelInvoice", "id": "INV-001", "status": "Paid" }
+        
+        entity = payload.get("entity")
+        if entity == "TravelInvoice":
+            # Re-sync expenses to capture the change
+            return sync_expenses_from_invoices(client)
+            
+        return {"status": "received"}
+    except Exception as e:
+        logger.error(f"Error processing BC webhook: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # --- SERVICES ---

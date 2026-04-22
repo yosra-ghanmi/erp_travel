@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BadgePlus,
   Eye,
@@ -34,12 +34,25 @@ export function ManageAgenciesPage({
   onEditAgency,
   onDeleteAgency,
   onImpersonate,
+  searchQuery,
 }) {
   const [form, setForm] = useState(blankAgency);
   const [editingId, setEditingId] = useState("");
   const [showCreds, setShowCreds] = useState(false);
   const [credData, setCredData] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  const filteredAgencies = useMemo(() => {
+    if (!searchQuery) return agencies;
+    const q = searchQuery.toLowerCase();
+    return agencies.filter((agency) => {
+      const name = String(agency.name || "").toLowerCase();
+      const status = String(agency.subscription_status || "").toLowerCase();
+      const owner = users.find((user) => user.id === agency.owner_id);
+      const ownerName = String(owner?.name || "").toLowerCase();
+      return name.includes(q) || status.includes(q) || ownerName.includes(q);
+    });
+  }, [agencies, searchQuery, users]);
 
   const submitAgency = () => {
     if (!form.name || !form.owner_id) return;
@@ -93,7 +106,7 @@ export function ManageAgenciesPage({
             "Total Bookings",
             "Actions",
           ]}
-          rows={agencies.map((agency) => {
+          rows={filteredAgencies.map((agency) => {
             const owner = users.find((user) => user.id === agency.owner_id);
             const totalBookings = bookings.filter(
               (booking) => booking.agency_id === agency.id

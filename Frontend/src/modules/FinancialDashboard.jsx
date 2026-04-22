@@ -44,7 +44,8 @@ export function FinancialDashboard() {
     // Expense type distribution
     const typeMap = {}
     expenses.forEach(e => {
-      typeMap[e.type] = (typeMap[e.type] || 0) + e.amount
+      const type = e.expensetype || e.type || 'Other'
+      typeMap[type] = (typeMap[type] || 0) + e.amount
     })
     const expenseDistribution = Object.entries(typeMap).map(([name, value]) => ({ name, value }))
 

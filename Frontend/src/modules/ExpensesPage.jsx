@@ -1,6 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button, DataTable, Input, Panel, Select } from "../components/ui";
-import { fetchExpenses, createExpense } from "../services/erpApi";
+import {
+  fetchExpenses,
+  createExpense,
+  syncExpensesFromInvoices,
+} from "../services/erpApi";
+import { RefreshCw } from "lucide-react";
 
 const initialForm = {
   type: "Hotel",
@@ -10,11 +15,22 @@ const initialForm = {
   description: "",
 };
 
-export function ExpensesPage() {
+export function ExpensesPage({ searchQuery }) {
   const [expenses, setExpenses] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const filteredExpenses = useMemo(() => {
+    if (!searchQuery) return expenses;
+    const q = searchQuery.toLowerCase();
+    return expenses.filter((exp) => {
+      const type = String(exp.expensetype || exp.type || "").toLowerCase();
+      const desc = String(exp.description || "").toLowerCase();
+      const id = String(exp.expenseid || "").toLowerCase();
+      return type.includes(q) || desc.includes(q) || id.includes(q);
+    });
+  }, [expenses, searchQuery]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -44,13 +60,43 @@ export function ExpensesPage() {
     }
   };
 
+  const handleSync = async () => {
+    setLoading(true);
+    try {
+      await syncExpensesFromInvoices();
+      const data = await fetchExpenses();
+      setExpenses(data || []);
+    } catch (err) {
+      setError("Failed to sync expenses from invoices.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="xl:col-span-2">
         <Panel
           title="Expenses Tracker"
           right={
-            <p className="text-xs text-slate-500">{expenses.length} records</p>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync}
+                disabled={loading}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw
+                  className={`h-3 w-3 ${loading ? "animate-spin" : ""}`}
+                />
+                Sync Invoices
+              </Button>
+              <p className="text-xs text-slate-500">
+                {filteredExpenses.length} records
+              </p>
+            </div>
           }
         >
           {error && (
@@ -60,7 +106,7 @@ export function ExpensesPage() {
           )}
           <DataTable
             headers={["ID", "Type", "Description", "Amount", "Date"]}
-            rows={expenses.map((exp) => (
+            rows={filteredExpenses.map((exp) => (
               <tr
                 key={exp.expenseid}
                 className="border-b border-slate-100 dark:border-slate-800"
@@ -68,7 +114,7 @@ export function ExpensesPage() {
                 <td className="px-2 py-3 text-xs font-mono">{exp.expenseid}</td>
                 <td className="px-2 py-3">
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase dark:bg-slate-800">
-                    {exp.type}
+                    {exp.expensetype || exp.type}
                   </span>
                 </td>
                 <td className="px-2 py-3 text-sm">{exp.description}</td>

@@ -29,6 +29,7 @@ import { UnauthorizedPage } from "./modules/UnauthorizedPage";
 import { ServicesPage } from "./modules/ServicesPage";
 import { TravelOffersPage } from "./modules/TravelOffersPage";
 import { QuotesPage } from "./modules/QuotesPage";
+import { TripsPage } from "./modules/TripsPage";
 import { BookingsPage as NewBookingsPage } from "./modules/ReservationsPage";
 import { tFor, getDir } from "./i18n";
 import {
@@ -53,13 +54,13 @@ const normalizeClient = (client) => ({
   phone: client.phone ?? "",
   country: client.country ?? "",
   notes: client.notes ?? "",
-  agency_id: client.agency_id ?? null,
+  agency_id: client.agency_id ?? client.agency_code ?? null,
   status: client.status ?? "active",
 });
 
 const normalizeBooking = (booking) => ({
   id: booking.bookingid ?? booking.bookingId ?? `BK-${Date.now()}`,
-  agency_id: booking.agency_id ?? null,
+  agency_id: booking.agency_id ?? booking.agency_code ?? null,
   clientId: booking.clientno ?? booking.clientNo ?? "",
   tripId: booking.tripid ?? booking.tripId ?? "",
   destination: booking.tripname ?? booking.tripName ?? "",
@@ -73,7 +74,7 @@ const normalizeBooking = (booking) => ({
 
 const normalizePayment = (payment) => ({
   id: payment.paymentid ?? payment.paymentId ?? `PAY-${Date.now()}`,
-  agency_id: payment.agency_id ?? null,
+  agency_id: payment.agency_id ?? payment.agency_code ?? null,
   bookingId: payment.bookingid ?? payment.bookingId ?? "",
   clientId: payment.clientno ?? payment.clientNo ?? "",
   method: payment.method ?? "",
@@ -84,7 +85,7 @@ const normalizePayment = (payment) => ({
 
 const normalizeService = (service) => ({
   id: service.code ?? service.id ?? `SV-${Date.now()}`,
-  agency_id: service.agency_id ?? null,
+  agency_id: service.agency_id ?? service.agency_code ?? null,
   name: service.name ?? "Unnamed Service",
   category: service.servicetype ?? service.serviceType ?? "Other",
   price: Number(service.price ?? 0),
@@ -193,6 +194,7 @@ function AppWorkspace() {
   const [invoices, setInvoices] = useState([]);
   const [serviceUsage, setServiceUsage] = useState([]);
   const [tenantAgencies, setTenantAgencies] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchAgencies()
@@ -284,6 +286,57 @@ function AppWorkspace() {
   }, [sessionUser?.id]);
 
   useEffect(() => {
+    if (!sessionUser?.id) return;
+
+    const handleStorageChange = (e) => {
+      if (e.key === `erp_notifications_${sessionUser.id}`) {
+        const updated = JSON.parse(e.newValue || "[]");
+        setNotifications(updated);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [sessionUser?.id]);
+
+  useEffect(() => {
+    if (sessionUser?.id) {
+      const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setNotifications(
+            parsed.map((n, idx) =>
+              typeof n === "string"
+                ? { id: `migrated-${idx}`, message: n, read: false }
+                : n
+            )
+          );
+        } catch (e) {
+          console.error("Failed to parse notifications", e);
+        }
+      } else {
+        // Fallback to default notifications if none saved
+        setNotifications([
+          { id: "notif-1", message: "New inquiry from website", read: false },
+          {
+            id: "notif-2",
+            message: "Pending payment for BK-9002",
+            read: false,
+          },
+          {
+            id: "notif-3",
+            message: "Trip seats low for Japan Golden Route",
+            read: false,
+          },
+        ]);
+      }
+    } else {
+      setNotifications([]);
+    }
+  }, [sessionUser?.id]);
+
+  useEffect(() => {
     if (sessionUser?.id) {
       localStorage.setItem(
         `erp_notifications_${sessionUser.id}`,
@@ -353,7 +406,7 @@ function AppWorkspace() {
         }));
         const nextUsage = (reservationRows ?? []).map((r) => ({
           id: r.reservationno || r.id,
-          agency_id: agencyId,
+          agency_id: r.agency_code || agencyId,
           serviceId: r.servicecode,
           clientId: r.clientno,
           status: r.status,
@@ -374,7 +427,7 @@ function AppWorkspace() {
             "Failed to load Business Central workspace data:",
             error
           );
-          setNotifications(["Unable to sync Business Central data"]);
+          pushNotification("Unable to sync Business Central data");
         }
       }
     };
@@ -593,10 +646,17 @@ function AppWorkspace() {
           onEditAgency={editAgency}
           onDeleteAgency={removeAgency}
           onImpersonate={impersonateAsAgency}
+          searchQuery={searchQuery}
         />
       );
     if (resolvedModuleKey === "ai_usage_logs")
-      return <AIUsageLogsPage logs={aiUsageLogs} agencies={tenantAgencies} />;
+      return (
+        <AIUsageLogsPage
+          logs={aiUsageLogs}
+          agencies={tenantAgencies}
+          searchQuery={searchQuery}
+        />
+      );
     if (resolvedModuleKey === "system_settings")
       return (
         <SystemSettingsPage settings={settings} setSettings={setSettings} />
@@ -614,6 +674,7 @@ function AppWorkspace() {
           payments={scopedPayments}
           revenueSeries={revenueSeries}
           activityFeed={activityFeed}
+          searchQuery={searchQuery}
         />
       );
     }
@@ -623,6 +684,7 @@ function AppWorkspace() {
           users={users}
           setUsers={setUsers}
           agencyId={agencyId}
+          searchQuery={searchQuery}
         />
       );
     if (resolvedModuleKey === "services") {
@@ -638,34 +700,56 @@ function AppWorkspace() {
           clients={scopedClients}
           hasPermission={hasPermission}
           sessionUser={sessionUser}
+          pushNotification={pushNotification}
+          searchQuery={searchQuery}
         />
       );
     }
     if (resolvedModuleKey === "clients") {
       return (
         <ClientsPage
-          clients={clients}
+          clients={scopedClients}
           setClients={setClients}
           bookings={scopedBookings}
           canDelete={hasPermission("clients", "delete")}
           agencyId={agencyId}
+          searchQuery={searchQuery}
         />
       );
     }
     if (resolvedModuleKey === "bookings") {
-      return <NewBookingsPage agencyId={agencyId} />;
+      return (
+        <NewBookingsPage
+          agencyId={agencyId}
+          reservations={scopedServiceUsage}
+          bookings={scopedBookings}
+          clients={scopedClients}
+          services={scopedServices}
+          searchQuery={searchQuery}
+        />
+      );
     }
     if (resolvedModuleKey === "quotes") {
-      return <QuotesPage agencyId={agencyId} />;
+      return <QuotesPage agencyId={agencyId} searchQuery={searchQuery} />;
     }
     if (resolvedModuleKey === "agency_finances") {
       return <FinancialDashboard />;
     }
     if (resolvedModuleKey === "payments") {
-      return <PaymentsPage />;
+      return <PaymentsPage searchQuery={searchQuery} />;
+    }
+    if (resolvedModuleKey === "trips") {
+      return (
+        <TripsPage
+          trips={trips}
+          setTrips={setTrips}
+          bookings={scopedBookings}
+          searchQuery={searchQuery}
+        />
+      );
     }
     if (resolvedModuleKey === "expenses") {
-      return <ExpensesPage />;
+      return <ExpensesPage searchQuery={searchQuery} />;
     }
     if (resolvedModuleKey === "ai") {
       return (
@@ -677,7 +761,7 @@ function AppWorkspace() {
       );
     }
     if (resolvedModuleKey === "travel_offers") {
-      return <TravelOffersPage role={role} />;
+      return <TravelOffersPage role={role} searchQuery={searchQuery} />;
     }
     return (
       <DashboardPage
@@ -686,6 +770,7 @@ function AppWorkspace() {
         payments={scopedPayments}
         revenueSeries={revenueSeries}
         activityFeed={activityFeed}
+        searchQuery={searchQuery}
       />
     );
   };
@@ -710,6 +795,8 @@ function AppWorkspace() {
         logout();
         navigate("/login");
       }}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       {renderModule()}
     </Layout>

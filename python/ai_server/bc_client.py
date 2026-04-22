@@ -198,13 +198,56 @@ class BCClient:
             return {k.lower(): v for k, v in data.items()}
         except Exception as e:
             url = f"{self._api_company_root()}/travelClients"
-            try:
-                r = self.session.post(url, auth=self._auth(), json=client_data, timeout=20)
-                r.raise_for_status()
-                data = r.json()
-                return {k.lower(): v for k, v in data.items()}
-            except Exception as e2:
-                raise Exception(f"BC Create Failed. OData Error: {str(e)}. API Error: {str(e2)}")
+            r = self.session.post(url, auth=self._auth(), json=client_data, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            return {k.lower(): v for k, v in data.items()}
+
+    def fetch_invoices(self) -> List[Dict]:
+        """Fetch all invoices from Business Central."""
+        try:
+            url = f"{self._company_root()}/TravelInvoiceAPI"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return r.json().get("value", [])
+        except Exception:
+            url = f"{self._api_company_root()}/travelInvoices"
+            r = self.session.get(url, auth=self._auth(), timeout=20)
+            r.raise_for_status()
+            return r.json().get("value", [])
+
+    def post_expense_to_bc(self, expense_data: Dict) -> Dict:
+        """
+        Post an expense to Business Central as a General Journal Entry.
+        Mapping strategy: 
+        - recipient_id -> Account No.
+        - amount -> Amount
+        - description -> Description
+        - source_invoice_id -> External Document No.
+        """
+        journal_line = {
+            "journalBatchName": "CASHOUT", # Example batch
+            "accountType": "G/L Account",
+            "accountNumber": expense_data.get("recipientId"),
+            "postingDate": expense_data.get("date"),
+            "documentNumber": f"EXP-{expense_data.get('sourceInvoiceId')}",
+            "amount": expense_data.get("amount"),
+            "description": expense_data.get("description"),
+            "externalDocumentNumber": expense_data.get("sourceInvoiceId")
+        }
+        
+        try:
+            # Using OData for General Journal Lines
+            url = f"{self._company_root()}/GenJournalLineAPI"
+            r = self.session.post(url, auth=self._auth(), json=journal_line, timeout=20)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            # Fallback to standard API if available
+            url = f"{self.base_url}/api/v2.0/companies({self._get_company_id()})/journalLines"
+            r = self.session.post(url, auth=self._auth(), json=journal_line, timeout=20)
+            r.raise_for_status()
+            return r.json()
 
     def travel_clients(self) -> List[Dict]:
         """Fetch all clients from Business Central."""
