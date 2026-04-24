@@ -1,0 +1,29 @@
+[
+  {
+    "staffId": "ST001",
+    "name": "Admin User",
+    "role": "Admin",
+    "amount": 2000.0,
+    "currency": "DT",
+    "paymentDate": "2026-04-24",
+    "monthYear": "04-2026"
+  },
+  {
+    "staffId": "ST002",
+    "name": "Finance Manager",
+    "role": "Finance",
+    "amount": 1800.0,
+    "currency": "DT",
+    "paymentDate": "2026-04-24",
+    "monthYear": "04-2026"
+  },
+  {
+    "staffId": "ST003",
+    "name": "Travel Agent 1",
+    "role": "Agent",
+    "amount": 1500.0,
+    "currency": "DT",
+    "paymentDate": "2026-04-24",
+    "monthYear": "04-2026"
+  }
+]

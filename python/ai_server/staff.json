@@ -1,0 +1,34 @@
+[
+  {
+    "no": "ST001",
+    "firstname": "Admin",
+    "lastname": "User",
+    "jobtitle": "Administrator",
+    "status": "Active",
+    "agency_code": "AG001"
+  },
+  {
+    "no": "ST002",
+    "firstname": "Finance",
+    "lastname": "Manager",
+    "jobtitle": "Finance Manager",
+    "status": "Active",
+    "agency_code": "AG001"
+  },
+  {
+    "no": "ST003",
+    "firstname": "Travel",
+    "lastname": "Agent 1",
+    "jobtitle": "Travel Agent",
+    "status": "Active",
+    "agency_code": "AG001"
+  },
+  {
+    "no": "ST004",
+    "firstname": "Inactive",
+    "lastname": "Staff",
+    "jobtitle": "Travel Agent",
+    "status": "Terminated",
+    "agency_code": "AG001"
+  }
+]

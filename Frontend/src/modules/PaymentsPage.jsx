@@ -351,14 +351,16 @@ export function PaymentsPage({ searchQuery }) {
                     key={iNo}
                     className="border-b border-slate-100 dark:border-slate-800"
                   >
-                    <td className="px-2 py-3 text-xs font-mono">{iNo}</td>
-                    <td className="px-2 py-3">
+                    <td className="px-2 py-3 text-xs font-mono text-slate-600 dark:text-slate-400">
+                      {iNo}
+                    </td>
+                    <td className="px-2 py-3 text-slate-700 dark:text-slate-300">
                       {inv.clientName ||
                         clients.find((c) => (c.no || c.id) === inv.clientNo)
                           ?.name ||
                         inv.clientNo}
                     </td>
-                    <td className="px-2 py-3 font-bold">
+                    <td className="px-2 py-3 font-bold text-slate-900 dark:text-slate-200">
                       ${inv.totalAmount || 0}
                     </td>
                     <td className="px-2 py-3 text-emerald-600">

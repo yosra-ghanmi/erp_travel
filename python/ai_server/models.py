@@ -205,18 +205,18 @@ class TravelQuote(BaseModel):
 
 
 class TravelInvoice(BaseModel):
-    invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
-    quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
-    service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
-    client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
-    client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
-    invoice_date: Optional[date] = Field(None, alias="invoiceDate", description="Invoice date")
-    due_date: Optional[date] = Field(None, alias="dueDate", description="Due date")
+    invoice_no: Optional[str] = Field(None, alias="invoiceno", description="Invoice number")
+    quote_no: Optional[str] = Field(None, alias="quoteno", description="Quote number")
+    service_code: Optional[str] = Field(None, alias="servicecode", description="Service code")
+    client_no: Optional[str] = Field(None, alias="clientno", description="Client number")
+    client_name: Optional[str] = Field(None, alias="clientname", description="Client name")
+    invoice_date: Optional[date] = Field(None, alias="invoicedate", description="Invoice date")
+    due_date: Optional[date] = Field(None, alias="duedate", description="Due date")
     status: Optional[str] = Field(None, description="Status (Open, Partial, Paid, Overdue)")
-    total_amount: Optional[float] = Field(None, alias="totalAmount", description="Total amount")
-    amount_paid: Optional[float] = Field(None, alias="amountPaid", description="Amount paid")
-    balance_due: Optional[float] = Field(None, alias="balanceDue", description="Balance due")
-    currency_code: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
+    total_amount: Optional[float] = Field(None, alias="totalamount", description="Total amount")
+    amount_paid: Optional[float] = Field(None, alias="amountpaid", description="Amount paid")
+    balance_due: Optional[float] = Field(None, alias="balancedue", description="Balance due")
+    currency_code: Optional[str] = Field(None, alias="currencycode", description="Currency code")
 
     class Config:
         populate_by_name = True
@@ -246,6 +246,44 @@ class TravelOffer(BaseModel):
     start_date: Optional[date] = Field(None, alias="startDate", description="Start date")
     end_date: Optional[date] = Field(None, alias="endDate", description="End date")
     highlights: List[str] = Field(default_factory=list, description="Key highlights")
+
+    class Config:
+        populate_by_name = True
+
+
+class StaffMember(BaseModel):
+    id: str = Field(..., alias="no", description="Staff ID (Employee No.)")
+    first_name: Optional[str] = Field(None, alias="firstname")
+    last_name: Optional[str] = Field(None, alias="lastname")
+    job_title: Optional[str] = Field(None, alias="jobtitle")
+    status: Optional[str] = Field(None)
+    agency_code: Optional[str] = Field(None, alias="agency_code")
+
+    @property
+    def name(self) -> str:
+        return f"{self.first_name or ''} {self.last_name or ''}".strip() or self.id
+
+    @property
+    def role(self) -> str:
+        # Map job title to one of our roles (Admin, Finance, Agent)
+        title = (self.job_title or "").lower()
+        if "admin" in title: return "Admin"
+        if "finance" in title: return "Finance"
+        return "Agent"
+
+    @property
+    def active(self) -> bool:
+        return (self.status or "").lower() == "active"
+
+
+class SalaryExpense(BaseModel):
+    staff_id: str = Field(..., alias="staffId")
+    name: str
+    role: str
+    amount: float
+    currency: str = "DT"
+    payment_date: date = Field(..., alias="paymentDate")
+    month_year: str = Field(..., alias="monthYear")  # Format: "MM-YYYY"
 
     class Config:
         populate_by_name = True

@@ -111,17 +111,23 @@ export function ExpensesPage({ searchQuery }) {
                 key={exp.expenseid}
                 className="border-b border-slate-100 dark:border-slate-800"
               >
-                <td className="px-2 py-3 text-xs font-mono">{exp.expenseid}</td>
+                <td className="px-2 py-3 text-xs font-mono text-slate-600 dark:text-slate-400">
+                  {exp.expenseid}
+                </td>
                 <td className="px-2 py-3">
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase dark:bg-slate-800">
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     {exp.expensetype || exp.type}
                   </span>
                 </td>
-                <td className="px-2 py-3 text-sm">{exp.description}</td>
+                <td className="px-2 py-3 text-sm text-slate-700 dark:text-slate-300">
+                  {exp.description}
+                </td>
                 <td className="px-2 py-3 font-bold text-rose-600">
                   -${exp.amount}
                 </td>
-                <td className="px-2 py-3 text-xs">{exp.date}</td>
+                <td className="px-2 py-3 text-xs text-slate-500 dark:text-slate-400">
+                  {exp.date}
+                </td>
               </tr>
             ))}
           />

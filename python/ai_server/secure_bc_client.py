@@ -59,9 +59,9 @@ class SecureBCClient:
     # ---------------------------------------------------------
     # Functional Access Mapping (Authorized entities per role)
     ROLE_PERMISSIONS = {
-        ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses"],
-        ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses"], # Financial entities only
-        ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff", "expenses"],
+        ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses", "staff", "journal_lines"],
+        ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses", "staff", "journal_lines"], # Financial entities only
+        ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff", "expenses", "journal_lines"],
         ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations", "invoices", "invoice_lines", "payments", "expenses"]
     }
 
@@ -168,6 +168,22 @@ class SecureBCClient:
             "agent_field": "agent_code",
             "id_field": "lineNo",
             "writable_fields": ["invoiceNo", "lineNo", "description", "quantity", "unitPrice", "amount", "agent_code", "agency_code"]
+        },
+        "staff": {
+            "endpoint": "EmployeeAPI",
+            "api_endpoint": "employees",
+            "filter_field": "agency_code",
+            "agent_field": None,
+            "id_field": "no",
+            "writable_fields": ["no", "firstName", "lastName", "jobTitle", "status", "agency_code"]
+        },
+        "journal_lines": {
+            "endpoint": "TravelJournalLineAPI",
+            "api_endpoint": "travelJournalLines",
+            "filter_field": "agency_code",
+            "agent_field": None,
+            "id_field": "lineNo",
+            "writable_fields": ["journalTemplateName", "journalBatchName", "lineNo", "accountType", "accountNo", "postingDate", "documentNo", "description", "amount", "balAccountType", "balAccountNo", "agency_code"]
         }
     }
 

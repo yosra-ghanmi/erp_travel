@@ -1,38 +1,102 @@
 [
   {
-    "expenseId": "EXP-SEED-001",
-    "sourceInvoiceId": "INV-1021",
-    "recipientId": "HOTEL-PARIS",
-    "expenseType": "Provider Payout",
-    "amount": 1275.0,
-    "date": "2026-01-15",
-    "description": "85% Payout for Hotel Le Meurice (INV-1021)",
-    "status": "Synchronized",
-    "agent_code": "AGENT-001",
-    "agency_code": "NAVIGO"
+    "expenseId": "PAYROLL-ST001-04-2026",
+    "sourceInvoiceId": null,
+    "recipientId": "ST001",
+    "expenseType": "Staff",
+    "amount": 2000.0,
+    "date": "2026-04-24",
+    "description": "Monthly Salary - Admin - 04-2026",
+    "status": "Failed"
   },
   {
-    "expenseId": "EXP-SEED-002",
-    "sourceInvoiceId": "INV-1021",
+    "expenseId": "PAYROLL-ST002-04-2026",
+    "sourceInvoiceId": null,
+    "recipientId": "ST002",
+    "expenseType": "Staff",
+    "amount": 1800.0,
+    "date": "2026-04-24",
+    "description": "Monthly Salary - Finance - 04-2026",
+    "status": "Failed"
+  },
+  {
+    "expenseId": "PAYROLL-ST003-04-2026",
+    "sourceInvoiceId": null,
+    "recipientId": "ST003",
+    "expenseType": "Staff",
+    "amount": 1500.0,
+    "date": "2026-04-24",
+    "description": "Monthly Salary - Agent - 04-2026",
+    "status": "Failed"
+  },
+  {
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1775832374",
+    "recipientId": "TS009",
+    "expenseType": "Provider Payout",
+    "amount": 161.5,
+    "date": "2026-04-24",
+    "description": "85% Payout for service H\u00f4tel La Kasbah (TS009)",
+    "status": "Pending"
+  },
+  {
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1775832541",
+    "recipientId": "TS009",
+    "expenseType": "Provider Payout",
+    "amount": 161.5,
+    "date": "2026-04-24",
+    "description": "85% Payout for service H\u00f4tel La Kasbah (TS009)",
+    "status": "Pending"
+  },
+  {
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1775835102",
     "recipientId": "AGENT-001",
     "expenseType": "Agent Commission",
-    "amount": 100.0,
-    "date": "2026-01-20",
-    "description": "5% Agent Commission for Invoice INV-1021",
-    "status": "Synchronized",
-    "agent_code": "AGENT-001",
-    "agency_code": "NAVIGO"
+    "amount": 53.25,
+    "date": "2026-04-24",
+    "description": "5% Agent Commission for Invoice INV-1775835102",
+    "status": "Pending"
   },
   {
-    "expenseId": "EXP-SEED-003",
-    "sourceInvoiceId": "INV-1022",
-    "recipientId": "ACTIVITY-TOUR",
-    "expenseType": "Provider Payout",
-    "amount": 425.0,
-    "date": "2026-01-22",
-    "description": "85% Payout for Eiffel Tower Tour (INV-1022)",
-    "status": "Pending",
-    "agent_code": "AGENT-001",
-    "agency_code": "NAVIGO"
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1775837137",
+    "recipientId": "AGENT-001",
+    "expenseType": "Agent Commission",
+    "amount": 53.25,
+    "date": "2026-04-24",
+    "description": "5% Agent Commission for Invoice INV-1775837137",
+    "status": "Pending"
+  },
+  {
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1776872963",
+    "recipientId": "AGENT-001",
+    "expenseType": "Agent Commission",
+    "amount": 350.0,
+    "date": "2026-04-24",
+    "description": "5% Agent Commission for Invoice INV-1776872963",
+    "status": "Pending"
+  },
+  {
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1776875844",
+    "recipientId": "AGENT-001",
+    "expenseType": "Agent Commission",
+    "amount": 150.0,
+    "date": "2026-04-24",
+    "description": "5% Agent Commission for Invoice INV-1776875844",
+    "status": "Pending"
+  },
+  {
+    "expenseId": null,
+    "sourceInvoiceId": "INV-1776876547",
+    "recipientId": "AGENT-001",
+    "expenseType": "Agent Commission",
+    "amount": 700.0,
+    "date": "2026-04-24",
+    "description": "5% Agent Commission for Invoice INV-1776876547",
+    "status": "Pending"
   }
 ]

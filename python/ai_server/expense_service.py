@@ -28,7 +28,9 @@ class ExpenseService:
         Condition: Only apply if the Invoice Total > 1000.
         Logic: Calculate 5% of the total invoice value as an expense/payout for the responsible Agent.
         """
-        if invoice.status != "Paid":
+        # Normalize status check to handle "Paid" and "Fully Paid" case-insensitively
+        status = (invoice.status or "").lower()
+        if status not in ["paid", "fully paid"]:
             return None
         
         if (invoice.total_amount or 0.0) <= 1000:

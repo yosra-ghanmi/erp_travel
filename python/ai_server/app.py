@@ -5,7 +5,7 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Dict
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,7 +41,9 @@ from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_t
 from secure_bc_client import SecureBCClient, get_secure_bc_client
 from user_sync_service import AgencyAdminSyncService
 from expense_service import ExpenseService
+from payroll_service import PayrollService
 from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -77,6 +79,41 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- PAYROLL SCHEDULER ---
+
+def run_monthly_payroll():
+    """Background task to generate payroll and sync invoice-based expenses"""
+    logger.info("Scheduler: Running monthly payroll job...")
+    try:
+        # Use superadmin role for automated tasks to bypass RBAC restrictions
+        client = SecureBCClient(user_role="superadmin")
+        
+        # 1. First, sync expenses from invoices (85% payouts and 5% commissions)
+        logger.info("Scheduler: Syncing service payouts and commissions...")
+        sync_result = sync_expenses_from_invoices(client)
+        logger.info(f"Scheduler: Sync completed: {sync_result}")
+        
+        # 2. Then, generate monthly payroll (Fixed salaries)
+        result = PayrollService.generate_monthly_payroll(client)
+        logger.info(f"Scheduler: Payroll job completed. Result: {result}")
+    except Exception as e:
+        logger.error(f"Scheduler: Payroll job failed: {e}")
+
+scheduler = BackgroundScheduler()
+
+@scheduler.scheduled_job('cron', day='28-31', hour=1, minute=0)
+def scheduled_payroll():
+    """Trigger payroll on the 29th or Feb 28th (non-leap)"""
+    today = date.today()
+    is_29th = today.day == 29
+    # February fallback: check if today is Feb 28th and tomorrow is March 1st (meaning it's the last day and not 29th)
+    is_feb_last_day = today.month == 2 and today.day == 28 and (today + timedelta(days=1)).month == 3
+    
+    if is_29th or is_feb_last_day:
+        run_monthly_payroll()
+
+scheduler.start()
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(static_dir):
@@ -376,6 +413,7 @@ def sync_expenses_from_invoices(client: SecureBCClient = Depends(get_secure_bc_c
         new_expenses_count = 0
         
         for inv in invoices:
+            logger.info(f"Checking Invoice {inv.invoice_no}: Status={inv.status}, Total={inv.total_amount}, Service={inv.service_code}")
             # 1. Provider Payout (85% Rule) - Triggered when service is invoiced
             if inv.service_code:
                 # Check if payout already exists for this invoice
@@ -389,23 +427,33 @@ def sync_expenses_from_invoices(client: SecureBCClient = Depends(get_secure_bc_c
                             service_data = service_results[0]
                             service = TravelService(**service_data)
                             payout = ExpenseService.calculate_provider_payout(service, inv.invoice_no)
-                            all_expenses.append(payout.dict(by_alias=True))
+                            # Fix: Use json.loads(payout.json()) for proper date serialization
+                            all_expenses.append(json.loads(payout.json(by_alias=True)))
                             new_expenses_count += 1
+                            logger.info(f"Created Provider Payout for Invoice {inv.invoice_no}")
                         else:
                             logger.warning(f"Service {inv.service_code} not found for payout calculation")
                     except Exception as serv_err:
                         logger.warning(f"Could not fetch service {inv.service_code}: {serv_err}")
+                else:
+                    logger.debug(f"Provider Payout for {inv.invoice_no} already exists.")
 
             # 2. Agent Commission (5% Rule) - Triggered when Paid and > 1000
-            if inv.status == "Paid" and (inv.total_amount or 0) > 1000:
+            # Normalize status check to handle "Paid" and "Fully Paid"
+            is_paid = inv.status and inv.status.lower() in ["paid", "fully paid"]
+            if is_paid and (inv.total_amount or 0) > 1000:
                 exists = any(e.get("sourceInvoiceId") == inv.invoice_no and e.get("expenseType") == "Agent Commission" for e in all_expenses)
                 if not exists:
                     # In this demo, we'll assign to a default agent if not specified
                     agent_id = "AGENT-001" 
                     commission = ExpenseService.calculate_agent_commission(inv, agent_id)
                     if commission:
-                        all_expenses.append(commission.dict(by_alias=True))
+                        # Fix: Use json.loads(commission.json()) for proper date serialization
+                        all_expenses.append(json.loads(commission.json(by_alias=True)))
                         new_expenses_count += 1
+                        logger.info(f"Created Agent Commission for Invoice {inv.invoice_no}")
+                else:
+                    logger.debug(f"Agent Commission for {inv.invoice_no} already exists.")
         
         if new_expenses_count > 0:
             _save_expenses(all_expenses)
@@ -419,6 +467,34 @@ def sync_expenses_from_invoices(client: SecureBCClient = Depends(get_secure_bc_c
     except Exception as e:
         logger.error(f"Error syncing expenses from invoices: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@app.post("/api/admin/payroll/trigger-manual")
+def trigger_manual_payroll(client: SecureBCClient = Depends(get_secure_bc_client)):
+    """
+    Manually triggers the payroll generation logic.
+    Includes syncing service payouts and agent commissions.
+    """
+    # Authorization check
+    if client.user_role not in ["admin", "superadmin", "finance"]:
+        raise HTTPException(status_code=403, detail="Not authorized to trigger payroll.")
+        
+    try:
+        # 1. Sync invoice-based expenses (Commissions & Payouts)
+        logger.info("Manual Trigger: Syncing service payouts and commissions...")
+        sync_result = sync_expenses_from_invoices(client)
+        
+        # 2. Generate monthly payroll (Fixed Salaries)
+        logger.info("Manual Trigger: Generating monthly payroll...")
+        payroll_result = PayrollService.generate_monthly_payroll(client)
+        
+        return {
+            "sync_status": sync_result,
+            "payroll_status": payroll_result
+        }
+    except Exception as e:
+        logger.error(f"Manual payroll trigger failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/bc-webhook")
