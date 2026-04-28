@@ -35,5 +35,20 @@
     "owner_id": "ADM-AG-003",
     "created_at": "2026-04-21",
     "is_active": true
+  },
+  {
+    "id": "AG-004",
+    "agency_id": "AG-004",
+    "name": "danzedin",
+    "logo": "/logo-agency.png",
+    "email": null,
+    "phone": null,
+    "address": null,
+    "city": null,
+    "country": null,
+    "subscription_status": "active",
+    "owner_id": "ADM-AG-004",
+    "created_at": "2026-04-26",
+    "is_active": true
   }
 ]

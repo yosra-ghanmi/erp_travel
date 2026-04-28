@@ -50,8 +50,9 @@ class SecureBCClient:
     ROLE_FINANCE = "finance"
     ROLE_ADMIN = "admin"
     ROLE_AGENT = "agent"
+    ROLE_HR = "hr"
 
-    AGENCY_CODE_FIELD = "agency_code"
+    AGENCY_CODE_FIELD = "Agency_Code"
     SALESPERSON_CODE_FIELD = "agent_code"
     AGENCY_ID_FIELD = "agency_id"
 
@@ -62,7 +63,8 @@ class SecureBCClient:
         ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses", "staff", "journal_lines"],
         ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses", "staff", "journal_lines"], # Financial entities only
         ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff", "expenses", "journal_lines"],
-        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations", "invoices", "invoice_lines", "payments", "expenses"]
+        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations", "invoices", "invoice_lines", "payments", "expenses"],
+        ROLE_HR: ["staff", "salary_grades", "contracts"]
     }
 
     # Action Restrictions (Deny specific actions for specific roles)
@@ -76,6 +78,11 @@ class SecureBCClient:
             "delete": ["agencies", "services", "offers", "staff"],
             "create": ["services", "offers"], # Agents still have read-only for these global types
             "update": ["services", "offers"]
+        },
+        ROLE_HR: {
+            "delete": ["agencies", "services", "offers", "quotes", "invoices", "payments"],
+            "create": ["agencies", "services", "offers", "quotes", "invoices", "payments"],
+            "update": ["agencies", "services", "offers", "quotes", "invoices", "payments"]
         }
     }
 
@@ -84,106 +91,122 @@ class SecureBCClient:
         "clients": {
             "endpoint": "TravelClientAPI",
             "api_endpoint": "travelClients",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "no",
-            "writable_fields": ["no", "name", "email", "phone", "country", "notes", "agent_code", "agency_code"]
+            "writable_fields": ["no", "name", "email", "phone", "country", "notes", "agent_code", "Agency_Code"]
         },
         "bookings": {
             "endpoint": "TravelBookingAPI",
             "api_endpoint": "travelBookings",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "bookingId",
-            "writable_fields": ["bookingId", "clientNo", "tripName", "startDate", "endDate", "amount", "notes", "agent_code", "agency_code"]
+            "writable_fields": ["bookingId", "clientNo", "tripName", "startDate", "endDate", "amount", "notes", "agent_code", "Agency_Code"]
         },
         "quotes": {
             "endpoint": "TravelQuoteAPI",
             "api_endpoint": "travelQuotes",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "quoteNo",
-            "writable_fields": ["quoteNo", "clientNo", "lineType", "serviceCode", "quantity", "numberOfNights", "quoteDate", "validUntilDate", "status","discount_percent", "currencyCode", "agent_code", "agency_code"]
+            "writable_fields": ["quoteNo", "clientNo", "lineType", "serviceCode", "quantity", "numberOfNights", "quoteDate", "validUntilDate", "status","discount_percent", "currencyCode", "agent_code", "Agency_Code"]
         },
         "invoices": {
             "endpoint": "TravelInvoiceAPI",
             "api_endpoint": "travelInvoices",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "invoiceNo",
-            "writable_fields": ["invoiceNo", "quoteNo", "clientNo", "invoiceDate", "dueDate", "status", "agent_code", "agency_code"]
+            "writable_fields": ["invoiceNo", "quoteNo", "clientNo", "invoiceDate", "dueDate", "status", "agent_code", "Agency_Code"]
         },
         "payments": {
             "endpoint": "TravelPaymentAPI",
             "api_endpoint": "travelPayments",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "paymentId",
-            "writable_fields": ["paymentId", "clientNo", "bookingId", "invoiceNo", "amount", "method", "date", "agent_code", "agency_code"]
+            "writable_fields": ["paymentId", "clientNo", "bookingId", "invoiceNo", "amount", "method", "date", "agent_code", "Agency_Code"]
         },
         "reservations": {
             "endpoint": "TravelReservationAPI",
             "api_endpoint": "travelReservations",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "reservationNo",
-            "writable_fields": ["reservationNo", "clientNo", "serviceCode", "reservationDate", "status", "agent_code", "agency_code"]
+            "writable_fields": ["reservationNo", "clientNo", "serviceCode", "reservationDate", "status", "agent_code", "Agency_Code"]
         },
         "services": {
             "endpoint": "TravelServiceAPI",
             "api_endpoint": "travelServices",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": None,
             "id_field": "code",
-            "writable_fields": ["code", "name", "serviceType", "price", "currencyCode", "location", "description", "imageUrl", "agency_code"]
+            "writable_fields": ["code", "name", "serviceType", "price", "currencyCode", "location", "description", "imageUrl", "Agency_Code"]
         },
         "offers": {
             "endpoint": "TravelOfferAPI",
             "api_endpoint": "travelOffers",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "id",
-            "writable_fields": ["id", "title", "destination", "summary", "durationDays", "price", "currencyCode", "startDate", "endDate", "agent_code", "agency_code"]
+            "writable_fields": ["id", "title", "destination", "summary", "durationDays", "price", "currencyCode", "startDate", "endDate", "agent_code", "Agency_Code"]
         },
         "expenses": {
             "endpoint": "TravelExpenseAPI",
             "api_endpoint": "travelExpenses",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "expenseId",
-            "writable_fields": ["expenseId", "sourceInvoiceId", "recipientId", "expenseType", "amount", "date", "description", "status", "agent_code", "agency_code"]
+            "writable_fields": ["expenseId", "sourceInvoiceId", "recipientId", "expenseType", "amount", "date", "description", "status", "agent_code", "Agency_Code"]
         },
         "quote_lines": {
             "endpoint": "TravelQuoteLineAPI",
             "api_endpoint": "travelQuoteLines",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "lineNo",
-            "writable_fields": ["quoteNo", "lineNo", "lineType", "serviceCode", "quantity", "numberOfNights", "agent_code", "agency_code"]
+            "writable_fields": ["quoteNo", "lineNo", "lineType", "serviceCode", "quantity", "numberOfNights", "agent_code", "Agency_Code"]
         },
         "invoice_lines": {
             "endpoint": "TravelInvoiceLineAPI",
             "api_endpoint": "travelInvoiceLines",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "lineNo",
-            "writable_fields": ["invoiceNo", "lineNo", "description", "quantity", "unitPrice", "amount", "agent_code", "agency_code"]
+            "writable_fields": ["invoiceNo", "lineNo", "description", "quantity", "unitPrice", "amount", "agent_code", "Agency_Code"]
         },
         "staff": {
             "endpoint": "EmployeeAPI",
             "api_endpoint": "employees",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": None,
             "id_field": "no",
-            "writable_fields": ["no", "firstName", "lastName", "jobTitle", "status", "agency_code"]
+            "writable_fields": ["no", "firstName", "lastName", "jobTitle", "status", "Agency_Code"]
+        },
+        "salary_grades": {
+            "endpoint": "SalaryGradeAPI",
+            "api_endpoint": "salaryGrades",
+            "filter_field": "Agency_Code",
+            "agent_field": None,
+            "id_field": "code",
+            "writable_fields": ["code", "description", "baseSalary", "bonus", "taxDeduction", "Agency_Code"]
+        },
+        "contracts": {
+            "endpoint": "ContractAPI",
+            "api_endpoint": "contracts",
+            "filter_field": "Agency_Code",
+            "agent_field": None,
+            "id_field": "contractNo",
+            "writable_fields": ["contractNo", "employeeNo", "startDate", "endDate", "status", "Agency_Code"]
         },
         "journal_lines": {
             "endpoint": "TravelJournalLineAPI",
             "api_endpoint": "travelJournalLines",
-            "filter_field": "agency_code",
+            "filter_field": "Agency_Code",
             "agent_field": None,
             "id_field": "lineNo",
-            "writable_fields": ["journalTemplateName", "journalBatchName", "lineNo", "accountType", "accountNo", "postingDate", "documentNo", "description", "amount", "balAccountType", "balAccountNo", "agency_code"]
+            "writable_fields": ["journalTemplateName", "journalBatchName", "lineNo", "accountType", "accountNo", "postingDate", "documentNo", "description", "amount", "balAccountType", "balAccountNo", "Agency_Code"]
         }
     }
 
@@ -210,9 +233,9 @@ class SecureBCClient:
         self.user_id = user_id
         self.user_role = user_role.lower()
         
-        # Superadmin and Finance have global/platform scope
-        self.is_platform_scope = self.user_role in (self.ROLE_SUPERADMIN, self.ROLE_FINANCE)
-        self.is_super_admin = (self.user_role == self.ROLE_SUPERADMIN)
+        # Superadmin, Finance, and HR have global/platform scope
+        self.is_platform_scope = self.user_role in (self.ROLE_SUPERADMIN, self.ROLE_FINANCE, self.ROLE_HR)
+        self.is_super_admin = (self.user_role == self.ROLE_SUPERADMIN) or (self.user_role == self.ROLE_HR)
 
         # SECURITY VALIDATION
         if self.user_role in (self.ROLE_ADMIN, self.ROLE_AGENT) and not agency_id:
@@ -331,8 +354,8 @@ class SecureBCClient:
         if agency_field in config.get("writable_fields", []):
             if self.user_role in (self.ROLE_ADMIN, self.ROLE_AGENT):
                 payload[agency_field] = self.agency_id
-            elif self.user_role == self.ROLE_SUPERADMIN and agency_field not in payload:
-                # Superadmin can specify agency or default to own
+            elif self.is_super_admin and agency_field not in payload:
+                # Superadmin/HR can specify agency or default to own
                 if self.agency_id:
                     payload[agency_field] = self.agency_id
 
@@ -351,12 +374,8 @@ class SecureBCClient:
         """
         Implements Navigo Hierarchical Filtering.
         """
-        # Global Entities: Services and Offers are managed by Superadmin and shared across all.
-        if entity_type in ("services", "offers"):
-            return None
-
-        # 1. Superadmin: No filters (Global scope)
-        if self.user_role == self.ROLE_SUPERADMIN:
+        # 1. Superadmin/HR: No filters (Global scope)
+        if self.is_super_admin:
             return None
 
         # 2. Finance: Platform-wide scope but restricted to financial entities (handled by _check_permission)
@@ -403,6 +422,38 @@ class SecureBCClient:
     # SECURED GET OPERATIONS
     # =====================================================================
 
+    def _sanity_check(self, entity_type: str, filters: Optional[List[str]] = None, payload: Optional[Dict] = None):
+        """
+        Perform a 'Sanity Check' to prevent cross-tenant data access.
+        
+        Checks if any provided filter or payload contains an agency_id 
+        other than the authenticated one.
+        """
+        if self.is_super_admin:
+            return
+
+        config = self.ENTITY_CONFIG.get(entity_type, {})
+        agency_field = config.get("filter_field", self.AGENCY_CODE_FIELD)
+
+        # 1. Check Filters
+        if filters:
+            for f in filters:
+                # Look for patterns like "agency_code eq 'OTHER_ID'" or "Agency_Code eq 'OTHER_ID'"
+                import re
+                match = re.search(rf"{agency_field}\s+eq\s+'([^']+)'", f, re.IGNORECASE)
+                if match:
+                    provided_id = match.group(1)
+                    if provided_id != self.agency_id:
+                        logger.error(f"Sanity Check Failed: Attempted to filter by another agency ID '{provided_id}' (Authorized: '{self.agency_id}')")
+                        raise AgencySECURITYError(f"403 Unauthorized: Multi-tenant violation detected. Access to agency '{provided_id}' is forbidden.")
+
+        # 2. Check Payload
+        if payload:
+            provided_id = payload.get(agency_field)
+            if provided_id and provided_id != self.agency_id:
+                logger.error(f"Sanity Check Failed: Attempted to write data for another agency ID '{provided_id}' (Authorized: '{self.agency_id}')")
+                raise AgencySECURITYError(f"403 Unauthorized: Multi-tenant violation detected. Data injection for agency '{provided_id}' is forbidden.")
+
     def secure_get(
         self,
         entity_type: str,
@@ -415,6 +466,9 @@ class SecureBCClient:
         Perform a SECURE GET with automatic Navigo role filtering.
         """
         self._check_permission("read", entity_type)
+        
+        # Mandatory Sanity Check
+        self._sanity_check(entity_type, filters=filters)
         
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:
@@ -539,6 +593,9 @@ class SecureBCClient:
         """
         self._check_permission("create", entity_type)
         
+        # Mandatory Sanity Check
+        self._sanity_check(entity_type, payload=payload)
+        
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:
             raise ValueError(f"Unknown entity type: {entity_type}")
@@ -586,6 +643,9 @@ class SecureBCClient:
         Perform a SECURE UPDATE with Navigo ownership verification.
         """
         self._check_permission("update", entity_type)
+        
+        # Mandatory Sanity Check
+        self._sanity_check(entity_type, payload=payload)
         
         config = self.ENTITY_CONFIG.get(entity_type)
         if not config:

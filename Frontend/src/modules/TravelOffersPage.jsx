@@ -144,10 +144,10 @@ export function TravelOffersPage({ role, searchQuery }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
             Travel Offers
           </h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Sync offers from Business Central and generate premium AI
             itineraries.
           </p>
@@ -164,9 +164,9 @@ export function TravelOffersPage({ role, searchQuery }) {
       </div>
 
       {showAddForm && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
               {editingOffer ? "Edit Travel Offer" : "Create New Travel Offer"}
             </h2>
             <button
@@ -185,7 +185,7 @@ export function TravelOffersPage({ role, searchQuery }) {
                   highlights: [],
                 });
               }}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             >
               <X className="h-5 w-5" />
             </button>
@@ -193,7 +193,7 @@ export function TravelOffersPage({ role, searchQuery }) {
           <form onSubmit={handleCreateOffer} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500 uppercase">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                   Offer Title
                 </label>
                 <input
@@ -203,12 +203,12 @@ export function TravelOffersPage({ role, searchQuery }) {
                   onChange={(e) =>
                     setNewOffer({ ...newOffer, title: e.target.value })
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   placeholder="e.g. Luxury Safari in Kenya"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500 uppercase">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                   Destination
                 </label>
                 <input
@@ -218,12 +218,12 @@ export function TravelOffersPage({ role, searchQuery }) {
                   onChange={(e) =>
                     setNewOffer({ ...newOffer, destination: e.target.value })
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   placeholder="e.g. Nairobi & Maasai Mara"
                 />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-medium text-slate-500 uppercase">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                   Summary
                 </label>
                 <textarea
@@ -232,13 +232,13 @@ export function TravelOffersPage({ role, searchQuery }) {
                   onChange={(e) =>
                     setNewOffer({ ...newOffer, summary: e.target.value })
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   rows={3}
                   placeholder="Describe the travel offer highlights..."
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500 uppercase">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                   Duration (Days)
                 </label>
                 <input
@@ -252,12 +252,12 @@ export function TravelOffersPage({ role, searchQuery }) {
                       duration_days: parseInt(e.target.value),
                     })
                   }
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Price
                   </label>
                   <input
@@ -271,11 +271,11 @@ export function TravelOffersPage({ role, searchQuery }) {
                         price: parseFloat(e.target.value),
                       })
                     }
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Currency
                   </label>
                   <select
@@ -283,7 +283,7 @@ export function TravelOffersPage({ role, searchQuery }) {
                     onChange={(e) =>
                       setNewOffer({ ...newOffer, currency: e.target.value })
                     }
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -295,7 +295,7 @@ export function TravelOffersPage({ role, searchQuery }) {
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     Start Date
                   </label>
                   <input
@@ -305,11 +305,11 @@ export function TravelOffersPage({ role, searchQuery }) {
                     onChange={(e) =>
                       setNewOffer({ ...newOffer, startDate: e.target.value })
                     }
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 uppercase">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
                     End Date
                   </label>
                   <input
@@ -319,7 +319,7 @@ export function TravelOffersPage({ role, searchQuery }) {
                     onChange={(e) =>
                       setNewOffer({ ...newOffer, endDate: e.target.value })
                     }
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-indigo-500"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -342,7 +342,7 @@ export function TravelOffersPage({ role, searchQuery }) {
                     highlights: [],
                   });
                 }}
-                className="rounded-xl border border-slate-200 px-6 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
@@ -370,9 +370,9 @@ export function TravelOffersPage({ role, searchQuery }) {
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 shadow-sm">
         {loading && !offers.length ? (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" />
             Syncing offers...
           </div>
@@ -381,20 +381,20 @@ export function TravelOffersPage({ role, searchQuery }) {
             {filteredOffers.map((offer) => (
               <div
                 key={offer.id}
-                className="group relative rounded-2xl border border-slate-200 bg-white p-4 hover:border-indigo-200 hover:shadow-md transition-all"
+                className="group relative rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 hover:border-indigo-200 dark:hover:border-indigo-500 hover:shadow-md transition-all"
               >
                 {isSuperAdmin && String(offer.id).startsWith("OFFER-") && (
                   <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleEditOffer(offer)}
-                      className="text-slate-400 hover:text-indigo-600"
+                      className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
                       title="Edit offer"
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteOffer(offer.id)}
-                      className="text-slate-400 hover:text-rose-500"
+                      className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400"
                       title="Delete local offer"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -402,16 +402,16 @@ export function TravelOffersPage({ role, searchQuery }) {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
                     {offer.title}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {offer.destination || "Multiple destinations"}
                   </p>
-                  <p className="text-sm text-slate-600 line-clamp-2">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
                     {offer.summary || "Premium travel offer."}
                   </p>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
                     {offer.duration_days
                       ? `${offer.duration_days} days • `
                       : ""}
@@ -422,7 +422,7 @@ export function TravelOffersPage({ role, searchQuery }) {
                 </div>
                 <button
                   onClick={() => handleGenerate(offer.id)}
-                  className="mt-4 w-full inline-flex items-center justify-center rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-indigo-600 hover:text-white transition-colors"
+                  className="mt-4 w-full inline-flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white hover:bg-indigo-600 hover:text-white transition-colors"
                   disabled={activeId === offer.id}
                 >
                   {activeId === offer.id ? (
@@ -439,7 +439,7 @@ export function TravelOffersPage({ role, searchQuery }) {
           </div>
         ) : (
           <div className="py-12 text-center">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               {searchQuery
                 ? `No travel offers found matching "${searchQuery}"`
                 : "No travel offers available."}
@@ -447,7 +447,7 @@ export function TravelOffersPage({ role, searchQuery }) {
             {isSuperAdmin && (
               <button
                 onClick={() => setShowAddForm(true)}
-                className="mt-4 text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                className="mt-4 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
               >
                 Create your first offer
               </button>
@@ -457,21 +457,23 @@ export function TravelOffersPage({ role, searchQuery }) {
       </div>
 
       {plan ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             {plan.plan?.title || "Premium Itinerary"}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{plan.plan?.summary}</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {plan.plan?.summary}
+          </p>
           <div className="mt-4 space-y-3">
             {plan.plan?.days?.map((day) => (
               <div
                 key={day.day}
-                className="rounded-xl border border-slate-200 px-3 py-2"
+                className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2"
               >
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
                   Day {day.day}: {day.title}
                 </p>
-                <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
                   {day.activities?.map((activity, index) => (
                     <li key={index}>{activity}</li>
                   ))}

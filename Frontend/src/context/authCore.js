@@ -63,6 +63,17 @@ export const permissionsMap = {
     finances: { create: false, read: true, update: false, delete: false },
     ai: { create: false, read: false, update: false, delete: false },
   },
+  hr: {
+    agencies: { create: false, read: true, update: false, delete: false },
+    staff: { create: true, read: true, update: true, delete: true },
+    salary_grades: { create: true, read: true, update: true, delete: true },
+    contracts: { create: true, read: true, update: true, delete: true },
+    clients: { create: false, read: false, update: false, delete: false },
+    bookings: { create: false, read: false, update: false, delete: false },
+    services: { create: false, read: false, update: false, delete: false, use: false },
+    finances: { create: false, read: false, update: false, delete: false },
+    ai: { create: false, read: false, update: false, delete: false },
+  },
 };
 
 export function useAuth() {

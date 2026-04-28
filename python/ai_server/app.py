@@ -38,7 +38,7 @@ from agency_models import Agency, AgencyCreate, AgencyUpdate
 from ai import generate_itinerary
 from mailing import send_email_with_attachment
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
-from secure_bc_client import SecureBCClient, get_secure_bc_client
+from secure_bc_client import SecureBCClient, get_secure_bc_client, AgencySECURITYError
 from user_sync_service import AgencyAdminSyncService
 from expense_service import ExpenseService
 from payroll_service import PayrollService
@@ -79,6 +79,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(AgencySECURITYError)
+async def agency_security_exception_handler(request: Request, exc: AgencySECURITYError):
+    """Handle multi-tenant isolation violations and return 403 Forbidden."""
+    logger.error(f"Security Violation: {exc}")
+    return JSONResponse(
+        status_code=403,
+        content={"detail": str(exc), "error": "Unauthorized", "code": "MULTI_TENANT_VIOLATION"},
+    )
 
 # --- PAYROLL SCHEDULER ---
 
@@ -351,15 +360,26 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
 def get_expenses(client: SecureBCClient = Depends(get_secure_bc_client)):
     """
     Returns a unified list of manual expenses, provider payouts, and agent commissions.
+    Strictly filtered by the current user's agency_id.
     """
     try:
-        # Load local expenses (payouts and commissions calculated)
-        local_expenses = _load_expenses()
+        # Load local expenses
+        all_local_expenses = _load_expenses()
         
-        # Optionally fetch manual expenses from BC if they exist there
+        # MANDATORY FILTERING for local records
+        if client.is_super_admin:
+            local_expenses = all_local_expenses
+        else:
+            local_expenses = [
+                e for e in all_local_expenses 
+                if e.get(client.AGENCY_CODE_FIELD.lower()) == client.agency_id or e.get(client.AGENCY_CODE_FIELD) == client.agency_id
+            ]
+        
+        # Fetch manual expenses from BC (automatically filtered by SecureBCClient)
         try:
             bc_expenses = client.secure_get("expenses")
-        except:
+        except Exception as bc_err:
+            logger.warning(f"Failed to fetch BC expenses: {bc_err}")
             bc_expenses = []
             
         return {"expenses": local_expenses + bc_expenses}
@@ -370,21 +390,33 @@ def get_expenses(client: SecureBCClient = Depends(get_secure_bc_client)):
 
 @app.post("/api/expenses")
 def create_expense(expense: ExpenseCreate, client: SecureBCClient = Depends(get_secure_bc_client)):
+    """
+    Create a new expense record with mandatory agency_id injection.
+    """
     try:
         expense_id = f"EXP-{int(time.time())}"
         expense_dict = expense.dict(by_alias=True)
         expense_dict["expenseId"] = expense_id
         expense_dict["status"] = "Pending"
         
-        # Save locally
+        # DATA INJECTION: Automatically inject the agency_id into the payload
+        # This prevents orphaned records or cross-posting.
+        if not client.is_super_admin:
+            expense_dict[client.AGENCY_CODE_FIELD] = client.agency_id
+        
+        # Save locally (with injected agency_id)
         expenses = _load_expenses()
         expenses.append(expense_dict)
         _save_expenses(expenses)
         
-        # Try to sync with BC
+        # Try to sync with BC (SecureBCClient will also inject/validate)
         try:
             bc_data = client.secure_create("expenses", expense_dict)
-            expense_dict["status"] = "Synchronized"
+            # Update status if synchronized
+            for e in expenses:
+                if e["expenseId"] == expense_id:
+                    e["status"] = "Synchronized"
+                    break
             _save_expenses(expenses)
             return bc_data
         except Exception as bc_err:

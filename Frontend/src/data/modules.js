@@ -56,6 +56,12 @@ export const modulesByRole = {
     { key: "payments", label: "Payments", icon: CreditCard },
     { key: "expenses", label: "Expenses", icon: ShoppingCart },
   ],
+  hr: [
+    { key: "hr_dashboard", label: "HR Dashboard", icon: LayoutDashboard },
+    { key: "staff_management", label: "Staff Management", icon: Users },
+    { key: "salary_grades", label: "Salary Grades", icon: Wallet },
+    { key: "contracts", label: "Contracts", icon: ReceiptText },
+  ],
 };
 
 export const defaultModuleByRole = {
@@ -63,4 +69,5 @@ export const defaultModuleByRole = {
   admin: "agency_dashboard",
   agent: "my_dashboard",
   finance: "agency_finances",
+  hr: "hr_dashboard",
 };

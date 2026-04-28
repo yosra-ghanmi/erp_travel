@@ -31,6 +31,9 @@ import { TravelOffersPage } from "./modules/TravelOffersPage";
 import { QuotesPage } from "./modules/QuotesPage";
 import { TripsPage } from "./modules/TripsPage";
 import { BookingsPage as NewBookingsPage } from "./modules/ReservationsPage";
+import { HRDashboardPage } from "./modules/HRDashboardPage";
+import { SalaryGradesPage } from "./modules/SalaryGradesPage";
+import { ContractsPage } from "./modules/ContractsPage";
 import { tFor, getDir } from "./i18n";
 import {
   fetchBookings,
@@ -372,6 +375,31 @@ function AppWorkspace() {
 
     const loadWorkspaceData = async () => {
       try {
+        const fetchPromises = [];
+        const fetchMap = {
+          clients: hasPermission("clients", "read")
+            ? fetchClients()
+            : Promise.resolve([]),
+          bookings: hasPermission("bookings", "read")
+            ? fetchBookings()
+            : Promise.resolve([]),
+          payments: hasPermission("payments", "read")
+            ? fetchPayments()
+            : Promise.resolve([]),
+          services: hasPermission("services", "read")
+            ? fetchServices()
+            : Promise.resolve([]),
+          reservations: hasPermission("services", "read")
+            ? fetchReservations()
+            : Promise.resolve([]),
+          quotes: hasPermission("quotes", "read")
+            ? fetchQuotes()
+            : Promise.resolve([]),
+          invoices: hasPermission("finances", "read")
+            ? fetchInvoices()
+            : Promise.resolve([]),
+        };
+
         const [
           clientRows,
           bookingRows,
@@ -381,13 +409,13 @@ function AppWorkspace() {
           quoteRows,
           invoiceRows,
         ] = await Promise.all([
-          fetchClients(),
-          fetchBookings(),
-          fetchPayments(),
-          fetchServices(),
-          fetchReservations(),
-          fetchQuotes(),
-          fetchInvoices(),
+          fetchMap.clients,
+          fetchMap.bookings,
+          fetchMap.payments,
+          fetchMap.services,
+          fetchMap.reservations,
+          fetchMap.quotes,
+          fetchMap.invoices,
         ]);
 
         if (cancelled) return;
@@ -661,6 +689,15 @@ function AppWorkspace() {
       return (
         <SystemSettingsPage settings={settings} setSettings={setSettings} />
       );
+    if (resolvedModuleKey === "hr_dashboard") {
+      return <HRDashboardPage users={users} searchQuery={searchQuery} />;
+    }
+    if (resolvedModuleKey === "salary_grades") {
+      return <SalaryGradesPage searchQuery={searchQuery} />;
+    }
+    if (resolvedModuleKey === "contracts") {
+      return <ContractsPage searchQuery={searchQuery} />;
+    }
     if (
       resolvedModuleKey === "agency_dashboard" ||
       resolvedModuleKey === "my_dashboard"
@@ -685,6 +722,7 @@ function AppWorkspace() {
           setUsers={setUsers}
           agencyId={agencyId}
           searchQuery={searchQuery}
+          role={role}
         />
       );
     if (resolvedModuleKey === "services") {
