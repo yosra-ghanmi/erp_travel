@@ -89,7 +89,16 @@ export function BookingsPage() {
             </div>
           )}
           <DataTable
-            headers={["ID", "Client", "Trip", "Dates", "Amount", "Actions"]}
+            headers={[
+              "ID",
+              "Client",
+              "Category",
+              "Source Invoice",
+              "Trip",
+              "Dates",
+              "Amount",
+              "Actions",
+            ]}
             rows={bookings.map((booking) => (
               <tr
                 key={booking.bookingid}
@@ -101,6 +110,14 @@ export function BookingsPage() {
                 <td className="px-2 py-3">
                   {clients.find((c) => (c.no || c.id) === booking.clientno)
                     ?.name || booking.clientno}
+                </td>
+                <td className="px-2 py-3">
+                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {booking.bookingcategory || "Manual"}
+                  </span>
+                </td>
+                <td className="px-2 py-3 text-xs font-mono">
+                  {booking.sourceinvoiceno || "N/A"}
                 </td>
                 <td className="px-2 py-3 font-medium">{booking.tripname}</td>
                 <td className="px-2 py-3 text-xs">

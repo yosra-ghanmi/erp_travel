@@ -60,10 +60,10 @@ class SecureBCClient:
     # ---------------------------------------------------------
     # Functional Access Mapping (Authorized entities per role)
     ROLE_PERMISSIONS = {
-        ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "payments", "reservations", "expenses", "staff", "journal_lines"],
-        ROLE_FINANCE: ["invoices", "invoice_lines", "payments", "expenses", "staff", "journal_lines"], # Financial entities only
-        ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "payments", "reservations", "staff", "expenses", "journal_lines"],
-        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations", "invoices", "invoice_lines", "payments", "expenses"],
+        ROLE_SUPERADMIN: ["agencies", "offers", "services", "clients", "bookings", "quotes", "quote_lines", "invoices", "invoice_lines", "travelInvoiceLines", "payments", "reservations", "expenses", "staff", "journal_lines"],
+        ROLE_FINANCE: ["invoices", "invoice_lines", "travelInvoiceLines", "payments", "expenses", "staff", "journal_lines"], # Financial entities only
+        ROLE_ADMIN: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "invoices", "invoice_lines", "travelInvoiceLines", "payments", "reservations", "staff", "expenses", "journal_lines"],
+        ROLE_AGENT: ["clients", "quotes", "quote_lines", "bookings", "services", "offers", "reservations", "invoices", "invoice_lines", "travelInvoiceLines", "payments", "expenses"],
         ROLE_HR: ["staff", "salary_grades", "contracts"]
     }
 
@@ -102,7 +102,7 @@ class SecureBCClient:
             "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "bookingId",
-            "writable_fields": ["bookingId", "clientNo", "tripName", "startDate", "endDate", "amount", "notes", "agent_code", "Agency_Code"]
+            "writable_fields": ["bookingId", "clientNo", "tripName", "startDate", "endDate", "amount", "notes", "bookingCategory", "sourceInvoiceNo", "automationReference", "agent_code", "Agency_Code"]
         },
         "quotes": {
             "endpoint": "TravelQuoteAPI",
@@ -158,7 +158,7 @@ class SecureBCClient:
             "filter_field": "Agency_Code",
             "agent_field": "agent_code",
             "id_field": "expenseId",
-            "writable_fields": ["expenseId", "sourceInvoiceId", "recipientId", "expenseType", "amount", "date", "description", "status", "agent_code", "Agency_Code"]
+            "writable_fields": ["expenseId", "sourceInvoiceId", "recipientId", "expenseType", "amount", "date", "description", "status", "documentReference", "ledgerAccountNo", "ledgerPostingStatus", "isDeductible", "automationKey", "agent_code", "Agency_Code"]
         },
         "quote_lines": {
             "endpoint": "TravelQuoteLineAPI",
@@ -175,6 +175,14 @@ class SecureBCClient:
             "agent_field": "agent_code",
             "id_field": "lineNo",
             "writable_fields": ["invoiceNo", "lineNo", "description", "quantity", "unitPrice", "amount", "agent_code", "Agency_Code"]
+        },
+        "travelInvoiceLines": {
+            "endpoint": "TravelInvoiceLineAPI",
+            "api_endpoint": "travelInvoiceLines",
+            "filter_field": "Agency_Code",
+            "agent_field": None,
+            "id_field": "lineNo",
+            "writable_fields": ["invoiceNo", "lineNo", "serviceCode", "description", "quantity", "unitPrice", "Agency_Code"]
         },
         "staff": {
             "endpoint": "EmployeeAPI",
@@ -374,6 +382,11 @@ class SecureBCClient:
         """
         Implements Navigo Hierarchical Filtering.
         """
+        # Services and offers behave like shared catalogs in the current app.
+        # Filtering them by agency hides valid records for admins and agents.
+        if entity_type in ("services", "offers"):
+            return None
+
         # 1. Superadmin/HR: No filters (Global scope)
         if self.is_super_admin:
             return None
@@ -415,8 +428,9 @@ class SecureBCClient:
                 msg = err_data.get("error", {}).get("message", r.text)
                 return f"{prefix}: {msg}"
         except Exception:
+            logger.error(f"Failed to parse BC error response for {prefix}: {r.text}")
             pass
-        return f"{prefix}: Status {r.status_code} - {r.text[:200]}"
+        return f"{prefix}: Status {r.status_code} - {r.text}"
 
     # =====================================================================
     # SECURED GET OPERATIONS
@@ -626,6 +640,12 @@ class SecureBCClient:
             r = self.session.post(url, auth=self._auth(), json=secure_payload, timeout=20)
             r.raise_for_status()
             return {k.lower(): v for k, v in r.json().items()}
+        except requests.exceptions.HTTPError as e2:
+            logger.error(f"SECURE CREATE Failed for {entity_type} (API). Status {e2.response.status_code}: {e2.response.text}")
+            raise Exception(f"SECURE CREATE Failed for {entity_type}. OData: {odata_error}, API: {e2}")
+        except requests.exceptions.RequestException as e2:
+            logger.error(f"SECURE CREATE Failed for {entity_type} (API): {e2}")
+            raise Exception(f"SECURE CREATE Failed for {entity_type}. OData: {odata_error}, API: {e2}")
         except Exception as e2:
             raise Exception(f"SECURE CREATE Failed for {entity_type}. OData: {odata_error}, API: {e2}")
 

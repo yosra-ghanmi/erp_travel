@@ -83,7 +83,11 @@ export function QuotesPage({ agencyId, searchQuery }) {
       clientNo: ["clientno", "client_no", "client_id"],
       clientName: ["clientname", "client_name", "name"],
       serviceCode: ["servicecode", "service_code"],
+      serviceCodes: ["servicecodes", "service_codes"],
+      serviceItems: ["serviceitems", "service_items"],
       lineType: ["linetype", "line_type"],
+      quantity: ["quantity"],
+      numberOfNights: ["numberofnights", "number_of_nights"],
       subtotal: ["subtotal", "sub_total"],
       discount_percent: [
         "discount_percent",
@@ -249,22 +253,135 @@ export function QuotesPage({ agencyId, searchQuery }) {
     setError("");
     setMessage("");
     try {
+      const getServiceDetails = (serviceCode, lineType) => {
+        const source = lineType === "Service" ? services : offers;
+        return source.find((s) => s.serviceCode === serviceCode);
+      };
+
+      const invoiceLines = [];
+
+      if (quote.serviceItems && quote.serviceItems.length > 0) {
+        for (const item of quote.serviceItems) {
+          const serviceDetail = getServiceDetails(
+            item.serviceCode,
+            item.lineType
+          );
+          const unitPrice = serviceDetail ? serviceDetail.price : 0;
+          const quantity = item.quantity || 1;
+          const numberOfNights = item.numberOfNights || 1;
+          const lineAmount = unitPrice * quantity * numberOfNights;
+
+          invoiceLines.push({
+            serviceCode: item.serviceCode,
+            serviceName: serviceDetail ? serviceDetail.name : item.serviceCode,
+            description: serviceDetail
+              ? serviceDetail.description
+              : item.serviceCode,
+            quantity: quantity,
+            unitPrice: unitPrice,
+            lineAmount: lineAmount,
+          });
+        }
+      } else if (quote.serviceCode) {
+        const serviceDetail = getServiceDetails(
+          quote.serviceCode,
+          quote.lineType
+        );
+        const unitPrice = serviceDetail ? serviceDetail.price : 0;
+        const quantity = quote.quantity || 1;
+        const numberOfNights = quote.numberOfNights || 1;
+        const lineAmount = unitPrice * quantity * numberOfNights;
+
+        invoiceLines.push({
+          serviceCode: quote.serviceCode,
+          serviceName: serviceDetail ? serviceDetail.name : quote.serviceCode,
+          description: serviceDetail
+            ? serviceDetail.description
+            : quote.serviceCode,
+          quantity: quantity,
+          unitPrice: unitPrice,
+          lineAmount: lineAmount,
+        });
+      }
+
+      if (invoiceLines.length === 0) {
+        const quoteLines = await fetchQuoteLines(quote.quoteNo);
+
+        for (const line of quoteLines || []) {
+          const quantity = Number(line.quantity || 1);
+          const unitPrice = Number(line.unitPrice || line.unitprice || 0);
+          const lineAmount = Number(
+            line.lineAmount ||
+              line.lineamount ||
+              unitPrice *
+                quantity *
+                Number(line.numberOfNights || line.numberofnights || 1)
+          );
+
+          invoiceLines.push({
+            serviceCode: line.serviceCode || line.servicecode || "",
+            serviceName:
+              line.serviceName ||
+              line.servicename ||
+              line.description ||
+              line.serviceCode ||
+              line.servicecode ||
+              "Travel Service",
+            description:
+              line.description ||
+              line.serviceName ||
+              line.servicename ||
+              line.serviceCode ||
+              line.servicecode ||
+              "Travel Service",
+            quantity,
+            unitPrice,
+            lineAmount,
+          });
+        }
+      }
+
+      if (invoiceLines.length === 0) {
+        const fallbackAmount = Number(quote.totalAmount || quote.subtotal || 0);
+
+        if (!fallbackAmount) {
+          throw new Error("No quote lines found to generate the invoice.");
+        }
+
+        invoiceLines.push({
+          serviceCode: quote.serviceCode || "",
+          serviceName: quote.serviceCode || `Quote ${quote.quoteNo}`,
+          description: `Quote ${quote.quoteNo}`,
+          quantity: 1,
+          unitPrice: fallbackAmount,
+          lineAmount: fallbackAmount,
+        });
+      }
+
       const invoiceData = {
         quoteNo: quote.quoteNo,
         clientNo: quote.clientNo,
-        serviceCode: quote.serviceCode,
-        // Environment Note: BC license restricts dates to specific months (Nov, Dec, Jan, Feb)
         invoiceDate: "2026-01-20",
         dueDate: "2026-02-20",
         status: "Open",
-        currencyCode: quote.currencyCode || "USD",
+        currencyCode: quote.currencyCode || "TND",
+        travelInvoiceLines: invoiceLines,
       };
+
+      // Remove serviceCode and totalAmount from top-level as they are handled by lines and BC
+      delete invoiceData.serviceCode;
+      delete invoiceData.totalAmount;
+
       await createInvoice(invoiceData);
       setMessage(`Invoice generated successfully for Quote ${quote.quoteNo}.`);
     } catch (err) {
-      const detail =
-        err.response?.data?.detail || err.message || "Unknown error";
-      setError(`Failed to generate invoice: ${detail}`);
+      const detail = err.response?.data?.detail;
+      const errorMessage = detail
+        ? typeof detail === "object"
+          ? JSON.stringify(detail)
+          : detail
+        : err.message || "Unknown error";
+      setError(`Failed to generate invoice: ${errorMessage}`);
       console.error(err);
     } finally {
       setLoading(false);

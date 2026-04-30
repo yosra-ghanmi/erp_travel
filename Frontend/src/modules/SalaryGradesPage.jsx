@@ -1,29 +1,20 @@
 import { useState } from "react";
-import { Plus, Trash2, Edit2 } from "lucide-react";
+import { Plus, Trash2, Edit2, DollarSign } from "lucide-react";
 import { Button, DataTable, Input, Panel, Modal } from "../components/ui";
+import {
+  createSalaryGrade,
+  updateSalaryGrade,
+  deleteSalaryGrade,
+} from "../services/erpApi";
 
-const initialGrades = [
-  {
-    id: "SG-001",
-    name: "Junior Agent",
-    baseSalary: 2500,
-    bonus: 200,
-    taxRate: 15,
-  },
-  {
-    id: "SG-002",
-    name: "Senior Agent",
-    baseSalary: 4500,
-    bonus: 500,
-    taxRate: 20,
-  },
-  { id: "SG-003", name: "Manager", baseSalary: 6500, bonus: 1000, taxRate: 25 },
-];
-
-export function SalaryGradesPage({ searchQuery }) {
-  const [grades, setGrades] = useState(initialGrades);
+export function SalaryGradesPage({
+  salaryGrades = [],
+  setSalaryGrades,
+  searchQuery,
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrade, setEditingGrade] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
     baseSalary: "",
@@ -31,7 +22,7 @@ export function SalaryGradesPage({ searchQuery }) {
     taxRate: "",
   });
 
-  const filteredGrades = grades.filter(
+  const filteredGrades = salaryGrades.filter(
     (g) =>
       !searchQuery || g.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -52,39 +43,45 @@ export function SalaryGradesPage({ searchQuery }) {
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name || !form.baseSalary) return;
+    setIsLoading(true);
 
-    if (editingGrade) {
-      setGrades((prev) =>
-        prev.map((g) =>
-          g.id === editingGrade.id
-            ? {
-                ...g,
-                ...form,
-                baseSalary: Number(form.baseSalary),
-                bonus: Number(form.bonus),
-                taxRate: Number(form.taxRate),
-              }
-            : g
-        )
-      );
-    } else {
-      const newGrade = {
-        id: `SG-${String(grades.length + 1).padStart(3, "0")}`,
+    try {
+      const payload = {
         ...form,
         baseSalary: Number(form.baseSalary),
         bonus: Number(form.bonus),
         taxRate: Number(form.taxRate),
       };
-      setGrades((prev) => [...prev, newGrade]);
+
+      if (editingGrade) {
+        await updateSalaryGrade(editingGrade.id, payload);
+        setSalaryGrades((prev) =>
+          prev.map((g) => (g.id === editingGrade.id ? { ...g, ...payload } : g))
+        );
+      } else {
+        const result = await createSalaryGrade(payload);
+        setSalaryGrades((prev) => [...prev, result]);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save salary grade:", error);
+      alert("Failed to save salary grade. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this salary grade?")) {
-      setGrades((prev) => prev.filter((g) => g.id !== id));
+      try {
+        await deleteSalaryGrade(id);
+        setSalaryGrades((prev) => prev.filter((g) => g.id !== id));
+      } catch (error) {
+        console.error("Failed to delete salary grade:", error);
+        alert("Failed to delete salary grade.");
+      }
     }
   };
 

@@ -29,6 +29,12 @@ class Booking(BaseModel):
     endDate: date
     amount: float
     notes: Optional[str] = None
+    booking_category: Optional[str] = Field(None, alias="bookingCategory")
+    source_invoice_no: Optional[str] = Field(None, alias="sourceInvoiceNo")
+    automation_reference: Optional[str] = Field(None, alias="automationReference")
+
+    class Config:
+        populate_by_name = True
 
 
 class BookingCreate(BaseModel):
@@ -38,6 +44,12 @@ class BookingCreate(BaseModel):
     endDate: date
     amount: float
     notes: Optional[str] = None
+    booking_category: Optional[str] = Field(None, alias="bookingCategory")
+    source_invoice_no: Optional[str] = Field(None, alias="sourceInvoiceNo")
+    automation_reference: Optional[str] = Field(None, alias="automationReference")
+
+    class Config:
+        populate_by_name = True
 
 
 class Payment(BaseModel):
@@ -78,6 +90,13 @@ class Expense(BaseModel):
     expense_date: date = Field(default_factory=date.today, alias="date")
     description: Optional[str] = None
     status: str = Field("Pending", description="Pending, Synchronized, Failed")
+    document_reference: Optional[str] = Field(None, alias="documentReference")
+    ledger_account_no: Optional[str] = Field(None, alias="ledgerAccountNo")
+    ledger_posting_status: Optional[str] = Field("Pending", alias="ledgerPostingStatus")
+    is_deductible: bool = Field(False, alias="isDeductible")
+    automation_key: Optional[str] = Field(None, alias="automationKey")
+    agent_code: Optional[str] = Field(None, alias="agent_code")
+    agency_code: Optional[str] = Field(None, alias="Agency_Code")
 
     class Config:
         populate_by_name = True
@@ -90,6 +109,13 @@ class ExpenseCreate(BaseModel):
     amount: float
     expense_date: date = Field(default_factory=date.today, alias="date")
     description: Optional[str] = None
+    document_reference: Optional[str] = Field(None, alias="documentReference")
+    ledger_account_no: Optional[str] = Field(None, alias="ledgerAccountNo")
+    ledger_posting_status: Optional[str] = Field("Pending", alias="ledgerPostingStatus")
+    is_deductible: bool = Field(False, alias="isDeductible")
+    automation_key: Optional[str] = Field(None, alias="automationKey")
+    agent_code: Optional[str] = Field(None, alias="agent_code")
+    agency_code: Optional[str] = Field(None, alias="Agency_Code")
 
     class Config:
         populate_by_name = True
@@ -205,18 +231,37 @@ class TravelQuote(BaseModel):
 
 
 class TravelInvoice(BaseModel):
-    invoice_no: Optional[str] = Field(None, alias="invoiceno", description="Invoice number")
-    quote_no: Optional[str] = Field(None, alias="quoteno", description="Quote number")
-    service_code: Optional[str] = Field(None, alias="servicecode", description="Service code")
-    client_no: Optional[str] = Field(None, alias="clientno", description="Client number")
-    client_name: Optional[str] = Field(None, alias="clientname", description="Client name")
-    invoice_date: Optional[date] = Field(None, alias="invoicedate", description="Invoice date")
-    due_date: Optional[date] = Field(None, alias="duedate", description="Due date")
+    invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
+    quote_no: Optional[str] = Field(None, alias="quoteNo", description="Quote number")
+    service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
+    client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
+    client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
+    invoice_date: Optional[date] = Field(None, alias="invoiceDate", description="Invoice date")
+    due_date: Optional[date] = Field(None, alias="dueDate", description="Due date")
     status: Optional[str] = Field(None, description="Status (Open, Partial, Paid, Overdue)")
-    total_amount: Optional[float] = Field(None, alias="totalamount", description="Total amount")
-    amount_paid: Optional[float] = Field(None, alias="amountpaid", description="Amount paid")
-    balance_due: Optional[float] = Field(None, alias="balancedue", description="Balance due")
-    currency_code: Optional[str] = Field(None, alias="currencycode", description="Currency code")
+    total_amount: Optional[float] = Field(None, alias="totalAmount", description="Total amount")
+    amount_paid: Optional[float] = Field(None, alias="amountPaid", description="Amount paid")
+    balance_due: Optional[float] = Field(None, alias="balanceDue", description="Balance due")
+    currency_code: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
+    agent_code: Optional[str] = Field(None, alias="agent_code")
+    agency_code: Optional[str] = Field(None, alias="Agency_Code")
+    booking_created: Optional[bool] = Field(None, alias="bookingCreated")
+    invoice_lines: List["TravelInvoiceLine"] = Field(default_factory=list, alias="travelInvoiceLines")
+
+    class Config:
+        populate_by_name = True
+
+
+class TravelInvoiceLine(BaseModel):
+    invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
+    line_no: Optional[int] = Field(None, alias="lineNo", description="Line number")
+    service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
+    service_name: Optional[str] = Field(None, alias="serviceName", description="Service name")
+    description: Optional[str] = Field(None, description="Description")
+    quantity: Optional[float] = Field(None, description="Quantity")
+    unit_price: Optional[float] = Field(None, alias="unitPrice", description="Unit Price")
+    line_amount: Optional[float] = Field(None, alias="lineAmount", description="Line Amount")
+    agency_code: Optional[str] = Field(None, alias="Agency_Code", description="Agency Code")
 
     class Config:
         populate_by_name = True

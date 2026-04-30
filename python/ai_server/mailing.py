@@ -8,7 +8,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def send_email_with_attachment(to_email: str, subject: str, body: str, attachment_base64: str = None, filename: str = "document.pdf"):
+def send_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    attachment_base64: str = None,
+    filename: str = "document.pdf",
+):
     """
     Sends an email with an optional attachment.
     SMTP settings are read from environment variables.
@@ -60,3 +66,18 @@ def send_email_with_attachment(to_email: str, subject: str, body: str, attachmen
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
         return False
+
+def send_email_with_attachment(
+    to_email: str,
+    subject: str,
+    body: str,
+    attachment_base64: str = None,
+    filename: str = "document.pdf",
+):
+    return send_email(
+        to_email=to_email,
+        subject=subject,
+        body=body,
+        attachment_base64=attachment_base64,
+        filename=filename,
+    )

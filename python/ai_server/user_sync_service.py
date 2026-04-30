@@ -118,7 +118,7 @@ class AgencyAdminSyncService:
         self,
         agency_id: str,
         agency_name: str,
-        owner_email: str = None
+        admin_email: str,
     ) -> Dict[str, Any]:
         """
         Creates an agency admin user for the newly created agency.
@@ -131,14 +131,17 @@ class AgencyAdminSyncService:
         Args:
             agency_id: The agency ID (e.g., "AG-001")
             agency_name: The agency name for display purposes
-            owner_email: Optional email for the admin (if not provided, generates a default)
+            admin_email: Email that the superadmin entered for the agency admin
 
         Returns:
             Dictionary with the created admin user data including temporary password
         """
         admin_id = f"ADM-{agency_id}"
         admin_name = f"Admin for {agency_name}"
-        admin_email = owner_email or f"admin.{agency_id.lower().replace('-', '_')}@system.local"
+        if not admin_email or not admin_email.strip():
+            raise ValueError("Admin email is required to create an agency admin")
+
+        admin_email = admin_email.strip()
         temp_password = self._generate_temp_password()
 
         admin_payload = {

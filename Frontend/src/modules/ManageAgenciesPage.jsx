@@ -22,6 +22,7 @@ const blankAgency = {
   name: "",
   logo: "/logo-agency.png",
   owner_id: "",
+  admin_email: "",
   subscription_status: "active",
 };
 
@@ -55,10 +56,11 @@ export function ManageAgenciesPage({
   }, [agencies, searchQuery, users]);
 
   const submitAgency = () => {
-    if (!form.name || !form.owner_id) return;
     if (editingId && editingId !== "new") {
+      if (!form.name || !form.owner_id) return;
       onEditAgency(editingId, form);
     } else {
+      if (!form.name || !form.admin_email) return;
       onAddAgency(form, (newAgencyData) => {
         if (newAgencyData) {
           setCredData(newAgencyData);
@@ -76,6 +78,7 @@ export function ManageAgenciesPage({
       name: agency.name,
       logo: agency.logo,
       owner_id: agency.owner_id,
+      admin_email: "",
       subscription_status: agency.subscription_status,
     });
   };
@@ -173,24 +176,46 @@ export function ManageAgenciesPage({
                 placeholder="Enter agency name"
               />
             </div>
-            <div>
-              <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-                Owner
-              </p>
-              <Select
-                value={form.owner_id}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, owner_id: event.target.value }))
-                }
-              >
-                <option value="">Select owner</option>
-                {adminUsers.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {editingId === "new" ? (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Admin Session Email
+                </p>
+                <Input
+                  type="email"
+                  value={form.admin_email}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      admin_email: event.target.value,
+                    }))
+                  }
+                  placeholder="admin@agency.com"
+                />
+              </div>
+            ) : (
+              <div>
+                <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Owner
+                </p>
+                <Select
+                  value={form.owner_id}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      owner_id: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select owner</option>
+                  {adminUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div>
               <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                 Logo URL

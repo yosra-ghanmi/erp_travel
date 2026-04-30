@@ -9,38 +9,12 @@ import {
   Modal,
   Select,
 } from "../components/ui";
+import { createContract, deleteContract } from "../services/erpApi";
 
-const initialContracts = [
-  {
-    id: "CON-001",
-    employee: "Amina Atlas",
-    type: "Full-time",
-    expiryDate: "2027-12-31",
-    status: "active",
-    fileName: "amina_contract.pdf",
-  },
-  {
-    id: "CON-002",
-    employee: "Rayan Agent",
-    type: "Contractor",
-    expiryDate: "2026-06-15",
-    status: "active",
-    fileName: "rayan_contract.pdf",
-  },
-  {
-    id: "CON-003",
-    employee: "Salma Finance",
-    type: "Full-time",
-    expiryDate: "2028-01-10",
-    status: "active",
-    fileName: "salma_contract.pdf",
-  },
-];
-
-export function ContractsPage({ searchQuery }) {
-  const [contracts, setContracts] = useState(initialContracts);
+export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     employee: "",
     type: "Full-time",
@@ -55,45 +29,69 @@ export function ContractsPage({ searchQuery }) {
       c.employee.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!form.employee || !form.expiryDate) return;
-    const newContract = {
-      id: `CON-${String(contracts.length + 1).padStart(3, "0")}`,
-      ...form,
-      status: "active",
-      fileName: `${form.employee.toLowerCase().replace(" ", "_")}_contract.pdf`,
-    };
-    setContracts((prev) => [...prev, newContract]);
-    setIsModalOpen(false);
-    setForm({ employee: "", type: "Full-time", expiryDate: "", salary: "" });
-    alert(
-      `Contract generated for ${form.employee}. You can now download the PDF.`
-    );
+    setIsLoading(true);
+
+    try {
+      const payload = {
+        ...form,
+        status: "active",
+        fileName: `${form.employee
+          .toLowerCase()
+          .replace(" ", "_")}_contract.pdf`,
+      };
+      const result = await createContract(payload);
+      setContracts((prev) => [...prev, result]);
+      setIsModalOpen(false);
+      setForm({ employee: "", type: "Full-time", expiryDate: "", salary: "" });
+      alert(
+        `Contract generated for ${form.employee}. You can now download the PDF.`
+      );
+    } catch (error) {
+      console.error("Failed to generate contract:", error);
+      alert("Failed to generate contract.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleImport = (e) => {
+  const handleImport = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setIsLoading(true);
 
-    // Simulate import
-    const newContract = {
-      id: `CON-${String(contracts.length + 1).padStart(3, "0")}`,
-      employee: file.name.split("_")[0] || "Unknown Employee",
-      type: "Imported",
-      expiryDate: new Date(Date.now() + 365 * 86400000)
-        .toISOString()
-        .split("T")[0],
-      status: "active",
-      fileName: file.name,
-    };
-    setContracts((prev) => [...prev, newContract]);
-    setIsImportModalOpen(false);
-    alert(`Successfully imported ${file.name}`);
+    try {
+      const payload = {
+        employee: file.name.split("_")[0] || "Unknown Employee",
+        type: "Imported",
+        expiryDate: new Date(Date.now() + 365 * 86400000)
+          .toISOString()
+          .split("T")[0],
+        status: "active",
+        fileName: file.name,
+      };
+      const result = await createContract(payload);
+      setContracts((prev) => [...prev, result]);
+      setIsImportModalOpen(false);
+      alert(`Successfully imported ${file.name}`);
+    } catch (error) {
+      console.error("Failed to import contract:", error);
+      alert("Failed to import contract.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this contract?")) {
-      setContracts((prev) => prev.filter((c) => c.id !== id));
+      try {
+        await deleteContract(id);
+        setContracts((prev) => prev.filter((c) => c.id !== id));
+      } catch (error) {
+        console.error("Failed to delete contract:", error);
+        alert("Failed to delete contract.");
+      }
     }
   };
 

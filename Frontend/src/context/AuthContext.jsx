@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { users as seedUsers } from "../data/mockData";
 import { AuthContext, permissionsMap } from "./authCore";
-import { fetchUsers } from "../services/erpApi";
+import { fetchUsers, loginUser } from "../services/erpApi";
 
 export function AuthProvider({ children }) {
   const [users, setUsers] = useState(seedUsers);
@@ -26,14 +26,14 @@ export function AuthProvider({ children }) {
   }, [sessionUser]);
 
   const login = async ({ email, password }) => {
-    const matched = users.find(
-      (user) =>
-        user.email.toLowerCase() === email.toLowerCase() &&
-        user.password === password
-    );
-    if (!matched) throw new Error("Invalid credentials");
-    setSessionUser(matched);
-    return matched;
+    try {
+      const user = await loginUser({ email, password });
+      setSessionUser(user);
+      return user;
+    } catch (error) {
+      const message = error.response?.data?.detail || "Invalid credentials";
+      throw new Error(message);
+    }
   };
 
   const register = async ({ name, email, password, role, agency_id }) => {

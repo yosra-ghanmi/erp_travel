@@ -52,6 +52,70 @@ export const updateTravelOffer = async (offerId, offerData) => {
   return data;
 };
 
+// HR ENDPOINTS
+export const fetchStaff = async () => {
+  const { data } = await api.get("/api/staff");
+  return data.staff;
+};
+
+export const createStaff = async (staffData) => {
+  const { data } = await api.post("/api/staff", staffData);
+  return data;
+};
+
+export const updateStaff = async (staffId, staffData) => {
+  const { data } = await api.patch(`/api/staff/${staffId}`, staffData);
+  return data;
+};
+
+export const deleteStaff = async (staffId) => {
+  const { data } = await api.delete(`/api/staff/${staffId}`);
+  return data;
+};
+
+export const fetchSalaryGrades = async () => {
+  const { data } = await api.get("/api/salary-grades");
+  return data.salary_grades;
+};
+
+export const createSalaryGrade = async (gradeData) => {
+  const { data } = await api.post("/api/salary-grades", gradeData);
+  return data;
+};
+
+export const updateSalaryGrade = async (gradeId, gradeData) => {
+  const { data } = await api.patch(`/api/salary-grades/${gradeId}`, gradeData);
+  return data;
+};
+
+export const deleteSalaryGrade = async (gradeId) => {
+  const { data } = await api.delete(`/api/salary-grades/${gradeId}`);
+  return data;
+};
+
+export const fetchContracts = async () => {
+  const { data } = await api.get("/api/contracts");
+  return data.contracts;
+};
+
+export const createContract = async (contractData) => {
+  const { data } = await api.post("/api/contracts", contractData);
+  return data;
+};
+
+export const updateContract = async (contractId, contractData) => {
+  const { data } = await api.patch(
+    `/api/contracts/${contractId}`,
+    contractData
+  );
+  return data;
+};
+
+export const deleteContract = async (contractId) => {
+  const { data } = await api.delete(`/api/contracts/${contractId}`);
+  return data;
+};
+
 // Agency AdminClients
 export const fetchClients = async () => {
   const { data } = await api.get("/api/clients");
@@ -171,11 +235,11 @@ export const fetchInvoiceLines = async (invoiceNo) => {
 };
 
 // Agency Admin
-export const createAgencyAdmin = async (agencyId, agencyName, ownerEmail) => {
+export const createAgencyAdmin = async (agencyId, agencyName, adminEmail) => {
   const { data } = await api.post("/api/agency-admin", {
     agency_id: agencyId,
     agency_name: agencyName,
-    owner_email: ownerEmail,
+    admin_email: adminEmail,
   });
   return data;
 };
@@ -184,6 +248,21 @@ export const createAgencyAdmin = async (agencyId, agencyName, ownerEmail) => {
 export const fetchUsers = async () => {
   const { data } = await api.get("/api/users");
   return data.users;
+};
+
+export const loginUser = async (credentials) => {
+  const { data } = await api.post("/api/login", credentials);
+  return data.user;
+};
+
+export const requestPasswordReset = async (resetRequest) => {
+  const { data } = await api.post("/api/reset-password/request", resetRequest);
+  return data;
+};
+
+export const resetPassword = async (resetData) => {
+  const { data } = await api.post("/api/reset-password", resetData);
+  return data;
 };
 
 // Agencies

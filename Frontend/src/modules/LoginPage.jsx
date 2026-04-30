@@ -60,14 +60,6 @@ export function LoginPage() {
     }
   }
 
-  const googleLogin = async () => {
-    setLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    await login({ email: 'agent@atlas.com', password: '123456' })
-    setLoading(false)
-    navigate('/')
-  }
-
   const motionItem = {
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0 },
@@ -211,20 +203,9 @@ export function LoginPage() {
                 </button>
                 {authError ? <p className="text-xs text-rose-600">{authError}</p> : null}
 
-                <button
-                  type="button"
-                  onClick={googleLogin}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-all duration-300 ease-in-out hover:scale-[1.01] hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
               </MotionForm>
 
-              <MotionP {...motionItem} className="pb-1 pt-2 text-center text-sm text-slate-500 dark:text-slate-400">
-                Don&apos;t have an account?{' '}
-                <Link to="/register" className="font-bold text-[#F97316] transition-all duration-300 ease-in-out hover:text-orange-600">Create account</Link>
-              </MotionP>
+              
             </div>
           </section>
         </div>

@@ -2,11 +2,16 @@ import os
 import logging
 import time
 import json
+import sqlite3
+import hashlib
+import secrets
+import string
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Dict
+from pydantic import ValidationError
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -36,17 +41,19 @@ from models import (
 )
 from agency_models import Agency, AgencyCreate, AgencyUpdate
 from ai import generate_itinerary
-from mailing import send_email_with_attachment
+from mailing import send_email, send_email_with_attachment
 from bc_client import BCClient, get_azure_ad_token, fetch_travel_offers, fetch_travel_offer_by_id
 from secure_bc_client import SecureBCClient, get_secure_bc_client, AgencySECURITYError
 from user_sync_service import AgencyAdminSyncService
 from expense_service import ExpenseService
+from financial_automation_service import FinancialAutomationService
 from payroll_service import PayrollService
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+financial_automation_service = FinancialAutomationService()
 
 # Ensure we load from both current and parent directory with override
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
@@ -139,12 +146,40 @@ def health_check():
     return {"status": "healthy", "service": "ERP-AI Integration"}
 
 
-# --- AGENCIES ---
+# --- DATA PERSISTENCE ---
 
 AGENCIES_FILE = os.path.join(os.path.dirname(__file__), "agencies.json")
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+DB_PATH = os.path.join(os.path.dirname(__file__), "navigo.sqlite")
 OFFERS_FILE = os.path.join(os.path.dirname(__file__), "travel_offers.json")
 EXPENSES_FILE = os.path.join(os.path.dirname(__file__), "expenses.json")
+PASSWORD_RESET_EXPIRY_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRY_MINUTES", "15"))
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def _ensure_password_reset_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            email TEXT PRIMARY KEY,
+            token_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def _hash_secret_word(secret_word: str) -> str:
+    normalized = secret_word.strip().upper()
+    return hashlib.sha256(normalized.encode()).hexdigest()
+
+def _generate_secret_word(length: int = 8) -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 def _load_agencies() -> List[Dict]:
     if not os.path.exists(AGENCIES_FILE):
@@ -157,14 +192,51 @@ def _save_agencies(agencies: List[Dict]):
         json.dump(agencies, f, indent=2)
 
 def _load_users() -> List[Dict]:
-    if not os.path.exists(USERS_FILE):
+    """Loads users from the SQLite database."""
+    if not os.path.exists(DB_PATH):
+        logger.warning(f"Database not found at {DB_PATH}")
         return []
-    with open(USERS_FILE, "r") as f:
-        return json.load(f)
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, email, password, role, agency_id FROM users")
+        rows = cursor.fetchall()
+        users = [dict(row) for row in rows]
+        conn.close()
+        return users
+    except Exception as e:
+        logger.error(f"Error loading users from DB: {e}")
+        return []
 
 def _save_users(users: List[Dict]):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f, indent=2)
+    """
+    Saves or updates users in the SQLite database.
+    Note: This is maintained for compatibility, but direct SQL operations are preferred.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        for user in users:
+            # Hash password if it looks like plain text (not a 64-char hex string)
+            password = user.get("password", "123456")
+            if len(password) != 64:
+                password = hashlib.sha256(password.encode()).hexdigest()
+
+            cursor.execute("""
+                INSERT INTO users (id, name, email, password, role, agency_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name=excluded.name,
+                    email=excluded.email,
+                    password=excluded.password,
+                    role=excluded.role,
+                    agency_id=excluded.agency_id
+            """, (user.id, user.name, user.email, password, user.role, user.agency_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error saving users to DB: {e}")
 
 def _load_offers() -> List[Dict]:
     if not os.path.exists(OFFERS_FILE):
@@ -199,6 +271,180 @@ def get_users():
         return {"users": _load_users()}
     except Exception as e:
         logger.error(f"Error fetching users: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    secret_word: str
+    new_password: str
+
+@app.post("/api/reset-password/request")
+def request_password_reset(req: PasswordResetRequest):
+    """Send a time-limited secret word by email for password reset."""
+    try:
+        _ensure_password_reset_table()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        normalized_email = req.email.strip().lower()
+
+        cursor.execute(
+            "SELECT id, name, email FROM users WHERE LOWER(email) = LOWER(?)",
+            (normalized_email,),
+        )
+        user = cursor.fetchone()
+
+        if not user:
+            conn.close()
+            return {
+                "status": "success",
+                "message": "If the email exists, a secret word has been sent.",
+            }
+
+        secret_word = _generate_secret_word()
+        created_at = datetime.utcnow()
+        expires_at = created_at + timedelta(minutes=PASSWORD_RESET_EXPIRY_MINUTES)
+
+        cursor.execute(
+            """
+            INSERT INTO password_reset_tokens (email, token_hash, expires_at, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                token_hash=excluded.token_hash,
+                expires_at=excluded.expires_at,
+                created_at=excluded.created_at
+            """,
+            (
+                normalized_email,
+                _hash_secret_word(secret_word),
+                expires_at.isoformat(),
+                created_at.isoformat(),
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        email_sent = send_email(
+            to_email=user["email"],
+            subject="Your password reset secret word",
+            body=(
+                f"Hello {user['name']},\n\n"
+                "Use the secret word below to reset your password in the platform.\n\n"
+                f"Secret word: {secret_word}\n"
+                f"Expires in: {PASSWORD_RESET_EXPIRY_MINUTES} minutes\n\n"
+                "Paste the secret word into the reset password form, choose a new password, "
+                "and submit the form.\n\n"
+                "If you did not request this reset, you can ignore this email."
+            ),
+        )
+
+        if not email_sent:
+            cleanup_conn = get_db_connection()
+            cleanup_cursor = cleanup_conn.cursor()
+            cleanup_cursor.execute(
+                "DELETE FROM password_reset_tokens WHERE LOWER(email) = LOWER(?)",
+                (normalized_email,),
+            )
+            cleanup_conn.commit()
+            cleanup_conn.close()
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to send the secret word email. Check SMTP settings.",
+            )
+
+        return {
+            "status": "success",
+            "message": "If the email exists, a secret word has been sent.",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Request password reset error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/login")
+def login(req: LoginRequest):
+    try:
+        users = _load_users()
+        hashed_password = hashlib.sha256(req.password.encode()).hexdigest()
+        
+        user = next((u for u in users if u["email"].lower() == req.email.lower() and u["password"] == hashed_password), None)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+            
+        return {"status": "success", "user": user}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    """Resets a user's password in the SQLite database."""
+    try:
+        _ensure_password_reset_table()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT token_hash, expires_at FROM password_reset_tokens WHERE LOWER(email) = LOWER(?)",
+            (req.email.strip().lower(),),
+        )
+        reset_token = cursor.fetchone()
+
+        if not reset_token:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Invalid or expired secret word")
+
+        expires_at = datetime.fromisoformat(reset_token["expires_at"])
+        if expires_at < datetime.utcnow():
+            cursor.execute(
+                "DELETE FROM password_reset_tokens WHERE LOWER(email) = LOWER(?)",
+                (req.email.strip().lower(),),
+            )
+            conn.commit()
+            conn.close()
+            raise HTTPException(status_code=400, detail="Secret word has expired")
+
+        if reset_token["token_hash"] != _hash_secret_word(req.secret_word):
+            conn.close()
+            raise HTTPException(status_code=400, detail="Invalid or expired secret word")
+
+        hashed_password = hashlib.sha256(req.new_password.encode()).hexdigest()
+
+        cursor.execute(
+            "UPDATE users SET password = ? WHERE LOWER(email) = LOWER(?)",
+            (hashed_password, req.email.strip().lower()),
+        )
+
+        if cursor.rowcount == 0:
+            cursor.execute(
+                "DELETE FROM password_reset_tokens WHERE LOWER(email) = LOWER(?)",
+                (req.email.strip().lower(),),
+            )
+            conn.commit()
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute(
+            "DELETE FROM password_reset_tokens WHERE LOWER(email) = LOWER(?)",
+            (req.email.strip().lower(),),
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "success", "message": "Password reset successful"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/agencies")
@@ -321,8 +567,12 @@ def create_booking(booking: BookingCreate, client: SecureBCClient = Depends(get_
             "startDate": booking.startDate.isoformat(),
             "endDate": booking.endDate.isoformat(),
             "amount": booking.amount,
-            "notes": booking.notes
+            "notes": booking.notes,
+            "bookingCategory": booking.booking_category,
+            "sourceInvoiceNo": booking.source_invoice_no,
+            "automationReference": booking.automation_reference,
         }
+        payload = {k: v for k, v in payload.items() if v is not None}
         return client.secure_create("bookings", payload)
     except Exception as e:
         logger.error(f"Error creating booking in BC: {e}")
@@ -347,7 +597,26 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
         payload = json.loads(payment.json(by_alias=True, exclude_none=True))
         if not payload.get("paymentId"):
             payload["paymentId"] = f"PAY-{int(time.time())}"
-        return client.secure_create("payments", payload)
+        payment_result = client.secure_create("payments", payload)
+
+        automation_result = None
+        invoice_no = payload.get("invoiceNo")
+        if invoice_no:
+            try:
+                invoice_results = client.secure_get("invoices", entity_id=invoice_no)
+                if invoice_results:
+                    automation_result = financial_automation_service.process_invoice(
+                        client,
+                        invoice_results[0],
+                        trigger_source="payment_create",
+                    )
+            except Exception as automation_exc:
+                logger.error(f"Financial automation failed after payment creation: {automation_exc}")
+                automation_result = {"status": "failed", "error": str(automation_exc)}
+
+        if automation_result is not None:
+            payment_result["_automation"] = automation_result
+        return payment_result
 
     except Exception as e:
         logger.error(f"Error creating payment in BC: {e}")
@@ -431,74 +700,139 @@ def create_expense(expense: ExpenseCreate, client: SecureBCClient = Depends(get_
 @app.post("/api/expenses/sync-invoices")
 def sync_expenses_from_invoices(client: SecureBCClient = Depends(get_secure_bc_client)):
     """
-    Triggers the calculation logic:
-    1. Provider Payout (85% Rule) on all invoices.
-    2. Agent Commission (5% Rule) on "Paid" invoices > 1000.
+    Runs the financial automation workflow across invoices:
+    1. Verify threshold-based booking conversion.
+    2. Create 85% provider payout expenses on fully paid invoices.
+    3. Create 5% deductible agent commissions for invoices above 1000.
     """
     try:
-        logger.info("Starting expense sync from invoices...")
-        invoices_raw = client.secure_get("invoices")
-        invoices = [TravelInvoice(**inv) for inv in invoices_raw]
-        logger.info(f"Fetched {len(invoices)} invoices from BC.")
-        
-        all_expenses = _load_expenses()
-        new_expenses_count = 0
-        
-        for inv in invoices:
-            logger.info(f"Checking Invoice {inv.invoice_no}: Status={inv.status}, Total={inv.total_amount}, Service={inv.service_code}")
-            # 1. Provider Payout (85% Rule) - Triggered when service is invoiced
-            if inv.service_code:
-                # Check if payout already exists for this invoice
-                exists = any(e.get("sourceInvoiceId") == inv.invoice_no and e.get("expenseType") == "Provider Payout" for e in all_expenses)
-                if not exists:
-                    # Fetch service details to get the price
-                    try:
-                        # Corrected: pass entity_id as second argument
-                        service_results = client.secure_get("services", inv.service_code)
-                        if service_results:
-                            service_data = service_results[0]
-                            service = TravelService(**service_data)
-                            payout = ExpenseService.calculate_provider_payout(service, inv.invoice_no)
-                            # Fix: Use json.loads(payout.json()) for proper date serialization
-                            all_expenses.append(json.loads(payout.json(by_alias=True)))
-                            new_expenses_count += 1
-                            logger.info(f"Created Provider Payout for Invoice {inv.invoice_no}")
-                        else:
-                            logger.warning(f"Service {inv.service_code} not found for payout calculation")
-                    except Exception as serv_err:
-                        logger.warning(f"Could not fetch service {inv.service_code}: {serv_err}")
-                else:
-                    logger.debug(f"Provider Payout for {inv.invoice_no} already exists.")
-
-            # 2. Agent Commission (5% Rule) - Triggered when Paid and > 1000
-            # Normalize status check to handle "Paid" and "Fully Paid"
-            is_paid = inv.status and inv.status.lower() in ["paid", "fully paid"]
-            if is_paid and (inv.total_amount or 0) > 1000:
-                exists = any(e.get("sourceInvoiceId") == inv.invoice_no and e.get("expenseType") == "Agent Commission" for e in all_expenses)
-                if not exists:
-                    # In this demo, we'll assign to a default agent if not specified
-                    agent_id = "AGENT-001" 
-                    commission = ExpenseService.calculate_agent_commission(inv, agent_id)
-                    if commission:
-                        # Fix: Use json.loads(commission.json()) for proper date serialization
-                        all_expenses.append(json.loads(commission.json(by_alias=True)))
-                        new_expenses_count += 1
-                        logger.info(f"Created Agent Commission for Invoice {inv.invoice_no}")
-                else:
-                    logger.debug(f"Agent Commission for {inv.invoice_no} already exists.")
-        
-        if new_expenses_count > 0:
-            _save_expenses(all_expenses)
-            logger.info(f"Created {new_expenses_count} new expense records.")
-            
-        return {
-            "status": "success", 
-            "message": f"Processed {len(invoices)} invoices. Created {new_expenses_count} new expense records.",
-            "total_expenses": len(all_expenses)
-        }
+        logger.info("Starting financial automation sync for invoices...")
+        return financial_automation_service.process_all_invoices(client, trigger_source="manual_sync")
     except Exception as e:
         logger.error(f"Error syncing expenses from invoices: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/financial-automation/logs")
+def get_financial_automation_logs(limit: int = 100):
+    try:
+        return {"logs": financial_automation_service.get_recent_logs(limit=limit)}
+    except Exception as e:
+        logger.error(f"Error fetching financial automation logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- HR ENDPOINTS ---
+
+@app.get("/api/staff")
+def get_staff(client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        staff = client.secure_get("staff")
+        return {"staff": staff}
+    except Exception as e:
+        logger.error(f"Error fetching staff: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/staff")
+def create_staff(staff_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_create("staff", staff_data)
+    except Exception as e:
+        logger.error(f"Error creating staff: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/staff/{staff_id}")
+def update_staff(staff_id: str, staff_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_update("staff", staff_id, staff_data)
+    except Exception as e:
+        logger.error(f"Error updating staff: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/staff/{staff_id}")
+def delete_staff(staff_id: str, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_delete("staff", staff_id)
+    except Exception as e:
+        logger.error(f"Error deleting staff: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/salary-grades")
+def get_salary_grades(client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        grades = client.secure_get("salary_grades")
+        return {"salary_grades": grades}
+    except Exception as e:
+        logger.error(f"Error fetching salary grades: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/salary-grades")
+def create_salary_grade(grade_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_create("salary_grades", grade_data)
+    except Exception as e:
+        logger.error(f"Error creating salary grade: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/salary-grades/{grade_id}")
+def update_salary_grade(grade_id: str, grade_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_update("salary_grades", grade_id, grade_data)
+    except Exception as e:
+        logger.error(f"Error updating salary grade: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/salary-grades/{grade_id}")
+def delete_salary_grade(grade_id: str, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_delete("salary_grades", grade_id)
+    except Exception as e:
+        logger.error(f"Error deleting salary grade: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/contracts")
+def get_contracts(client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        contracts = client.secure_get("contracts")
+        return {"contracts": contracts}
+    except Exception as e:
+        logger.error(f"Error fetching contracts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/contracts")
+def create_contract(contract_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_create("contracts", contract_data)
+    except Exception as e:
+        logger.error(f"Error creating contract: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/contracts/{contract_id}")
+def update_contract(contract_id: str, contract_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_update("contracts", contract_id, contract_data)
+    except Exception as e:
+        logger.error(f"Error updating contract: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/contracts/{contract_id}")
+def delete_contract(contract_id: str, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        return client.secure_delete("contracts", contract_id)
+    except Exception as e:
+        logger.error(f"Error deleting contract: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/admin/payroll/trigger-manual")
@@ -544,8 +878,16 @@ async def bc_webhook(request: Request, client: SecureBCClient = Depends(get_secu
         
         entity = payload.get("entity")
         if entity == "TravelInvoice":
-            # Re-sync expenses to capture the change
-            return sync_expenses_from_invoices(client)
+            invoice_no = payload.get("id") or payload.get("invoiceNo")
+            if invoice_no:
+                invoice_results = client.secure_get("invoices", entity_id=invoice_no)
+                if invoice_results:
+                    return financial_automation_service.process_invoice(
+                        client,
+                        invoice_results[0],
+                        trigger_source="bc_webhook",
+                    )
+            return financial_automation_service.process_all_invoices(client, trigger_source="bc_webhook")
             
         return {"status": "received"}
     except Exception as e:
@@ -751,12 +1093,51 @@ def get_invoices(client: SecureBCClient = Depends(get_secure_bc_client)):
 @app.post("/api/invoices")
 def create_invoice(invoice: TravelInvoice, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
-        payload = json.loads(invoice.json(by_alias=True, exclude_none=True))
-        if not payload.get("invoiceNo"):
-            payload["invoiceNo"] = f"INV-{int(time.time())}"
-        return client.secure_create("invoices", payload)
+        # invoice is already a TravelInvoice Pydantic model instance
+        processed_payload = invoice.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude_unset=True,
+        )
+
+        if not processed_payload.get("invoiceNo"):
+            processed_payload["invoiceNo"] = f"INV-{int(time.time())}"
+        
+        # Extract invoice lines before creating the main invoice
+        invoice_lines_data = processed_payload.pop("travelInvoiceLines", [])
+
+        # Create the main invoice record
+        created_invoice = client.secure_create("invoices", processed_payload)
+        invoice_no = (
+            created_invoice.get("invoiceNo")
+            or created_invoice.get("invoiceno")
+            or processed_payload.get("invoiceNo")
+        )
+
+        if not invoice_no:
+            raise HTTPException(status_code=500, detail="Failed to retrieve invoice number after creation.")
+
+        # If Quote No. is present, BC already copies quote lines into invoice lines on insert.
+        if not processed_payload.get("quoteNo"):
+            for idx, line in enumerate(invoice_lines_data):
+                line_payload = dict(line)
+                line_payload.pop("lineAmount", None)
+                line_payload.pop("serviceName", None)
+                line_payload["invoiceNo"] = invoice_no
+                line_payload["lineNo"] = (idx + 1) * 10000  # Assign line numbers
+                client.secure_create("travelInvoiceLines", line_payload)
+
+        saved_invoice = client.secure_get("invoices", entity_id=invoice_no)
+        if saved_invoice:
+            return saved_invoice[0]
+
+        created_invoice["invoiceNo"] = invoice_no
+        return created_invoice
+    except ValidationError as e:
+        logger.error(f"Pydantic Validation Error creating invoice: {e.errors()}")
+        raise HTTPException(status_code=422, detail=e.errors())
     except Exception as e:
-        logger.error(f"Error creating invoice in BC: {e}")
+        logger.error(f"Error creating invoice: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -808,7 +1189,7 @@ def send_email(req: EmailRequest):
 class AgencyAdminCreate(BaseModel):
     agency_id: str
     agency_name: str
-    owner_email: Optional[str] = None
+    admin_email: str
 
 
 def _get_admin_bc_client():
@@ -822,12 +1203,12 @@ def create_agency_admin(req: AgencyAdminCreate, company_name: str | None = None)
         # This ensures the platform works even if Business Central is down
         admin_id = f"ADM-{req.agency_id}"
         admin_name = f"Admin for {req.agency_name}"
-        admin_email = req.owner_email or f"admin.{req.agency_id.lower().replace('-', '_')}@system.local"
+        admin_email = req.admin_email.strip()
+        if not admin_email:
+            raise HTTPException(status_code=400, detail="Admin email is required")
         
         # We need a temp password for the local user
         # We'll borrow the logic from the service or just generate one here
-        import secrets
-        import string
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
 
@@ -849,7 +1230,7 @@ def create_agency_admin(req: AgencyAdminCreate, company_name: str | None = None)
             bc_result = agency_admin_svc.create_agency_admin(
                 agency_id=req.agency_id,
                 agency_name=req.agency_name,
-                owner_email=req.owner_email
+                admin_email=admin_email
             )
             # Update with BC data if successful
             result.update(bc_result)
