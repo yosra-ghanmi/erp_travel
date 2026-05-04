@@ -65,6 +65,7 @@ const normalizeClient = (client) => ({
 });
 
 const normalizeBooking = (booking) => ({
+  ...booking,
   id: booking.bookingid ?? booking.bookingId ?? `BK-${Date.now()}`,
   agency_id: booking.agency_id ?? booking.agency_code ?? null,
   clientId: booking.clientno ?? booking.clientNo ?? "",
@@ -79,6 +80,7 @@ const normalizeBooking = (booking) => ({
 });
 
 const normalizePayment = (payment) => ({
+  ...payment,
   id: payment.paymentid ?? payment.paymentId ?? `PAY-${Date.now()}`,
   agency_id: payment.agency_id ?? payment.agency_code ?? null,
   bookingId: payment.bookingid ?? payment.bookingId ?? "",
@@ -90,6 +92,7 @@ const normalizePayment = (payment) => ({
 });
 
 const normalizeService = (service) => ({
+  ...service,
   id: service.code ?? service.id ?? `SV-${Date.now()}`,
   agency_id: service.agency_id ?? service.agency_code ?? null,
   name: service.name ?? "Unnamed Service",
@@ -100,6 +103,7 @@ const normalizeService = (service) => ({
 });
 
 const normalizeStaff = (member) => ({
+  ...member,
   id: member.no ?? member.id ?? `ST-${Date.now()}`,
   name:
     member.firstName && member.lastName
@@ -116,6 +120,7 @@ const normalizeStaff = (member) => ({
 });
 
 const normalizeSalaryGrade = (grade) => ({
+  ...grade,
   id: grade.code ?? grade.id ?? `SG-${Date.now()}`,
   agency_id: grade.agency_id ?? grade.agency_code ?? null,
   name: grade.name ?? grade.code ?? "Unknown Grade",
@@ -125,6 +130,7 @@ const normalizeSalaryGrade = (grade) => ({
 });
 
 const normalizeContract = (contract) => ({
+  ...contract,
   id: contract.contractNo ?? contract.id ?? `CT-${Date.now()}`,
   agency_id: contract.agency_id ?? contract.agency_code ?? null,
   employee: contract.employeeName ?? contract.employee ?? "Unknown Employee",
@@ -841,6 +847,8 @@ function AppWorkspace() {
           clients={scopedClients}
           setClients={setClients}
           bookings={scopedBookings}
+          reservations={scopedServiceUsage}
+          services={scopedServices}
           canDelete={hasPermission("clients", "delete")}
           agencyId={agencyId}
           searchQuery={searchQuery}

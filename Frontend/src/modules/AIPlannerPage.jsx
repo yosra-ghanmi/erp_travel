@@ -1,223 +1,444 @@
-import { useMemo, useState } from "react";
-import { Bot, Sparkles, UserRound } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { MapPinned, Sparkles } from "lucide-react";
 import { Button, Input, Panel, Select } from "../components/ui";
+import { fetchServices, generatePlannerItinerary } from "../services/erpApi";
 
-const formatCurrency = (value) => `$${Math.round(value).toLocaleString()}`;
+const formatCurrency = (value) =>
+  `$${Math.round(Number(value || 0)).toLocaleString()}`;
 
-const buildMockItinerary = ({ destination, budget, dates, preference }) => {
-  const dayCount = Math.max(3, Math.min(10, Number(dates) || 5));
-  const dailyBase = Number(budget || 1500) / dayCount;
-  const mood = {
-    luxury: ["Rooftop dining", "Private guide", "5-star spa"],
-    adventure: ["Hiking tour", "ATV off-road", "Sunrise trek"],
-    family: ["Theme park day", "Aquarium visit", "Cooking class"],
-    culture: ["Museum route", "Historic walk", "Local market"],
-  };
-
-  const days = Array.from({ length: dayCount }).map((_, index) => ({
-    day: index + 1,
-    title: `Day ${index + 1} in ${destination}`,
-    activities: [
-      `Morning: ${mood[preference]?.[index % 3] ?? "City exploration"}`,
-      "Afternoon: Signature attraction visit",
-      "Evening: Local cuisine and leisure",
-    ],
-    estimatedCost: Math.round(dailyBase),
-  }));
-
-  return {
-    summary: `A ${dayCount}-day ${preference} itinerary for ${destination}, optimized around a budget of ${formatCurrency(
-      budget || 1500
-    )}.`,
-    hotelSuggestions: [
-      "Azure Bay Hotel",
-      "The Atlas Residence",
-      "City View Boutique",
-    ],
-    attractions: [
-      "Old Town district",
-      "Main cultural museum",
-      "Panoramic viewpoint",
-      "Local artisan market",
-    ],
-    costBreakdown: {
-      accommodation: Math.round((budget || 1500) * 0.45),
-      transport: Math.round((budget || 1500) * 0.2),
-      activities: Math.round((budget || 1500) * 0.22),
-      food: Math.round((budget || 1500) * 0.13),
-    },
-    days,
-  };
+const STYLE_KEYWORDS = {
+  adventure: [
+    "adventure",
+    "hiking",
+    "trek",
+    "climb",
+    "diving",
+    "quad",
+    "atv",
+    "safari",
+    "excursion",
+  ],
+  luxury: ["luxury", "spa", "resort", "private", "premium", "hotel", "suite"],
+  family: ["family", "park", "kids", "aquarium", "zoo", "beach", "museum"],
+  culture: [
+    "culture",
+    "museum",
+    "heritage",
+    "old town",
+    "medina",
+    "historic",
+    "archaeological",
+  ],
 };
 
-async function generateWithOpenAI(prompt, apiKey) {
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      input: prompt,
-      text: { format: { type: "text" } },
-    }),
-  });
+const DAY_COLORS = ["#0f766e", "#2563eb", "#9333ea", "#d97706", "#dc2626"];
 
-  if (!response.ok) {
-    throw new Error("Failed to generate itinerary from AI provider");
+function normalizePlannerService(service) {
+  return {
+    id: service.code ?? service.id ?? `SV-${Date.now()}`,
+    name: service.name ?? "Unnamed Service",
+    serviceType: service.servicetype ?? service.serviceType ?? "Other",
+    location: service.location ?? service.destination ?? "",
+    description: service.description ?? service.longdescription ?? "",
+    price: Number(service.price ?? 0),
+    latitude: Number(service.latitude ?? 0),
+    longitude: Number(service.longitude ?? 0),
+    imageUrl: service.imageurl ?? service.imageUrl ?? "",
+  };
+}
+
+function scoreService(service, form) {
+  const haystack = `${service.name} ${service.serviceType} ${service.location} ${service.description}`.toLowerCase();
+  const keywords = STYLE_KEYWORDS[form.activityStyle] ?? [];
+  let score = 0;
+
+  if (service.latitude && service.longitude) score += 6;
+  if (!service.price || service.price <= form.dailyBudget) score += 3;
+  if (service.price && service.price <= form.dailyBudget * 1.5) score += 1;
+  if (
+    form.destination &&
+    haystack.includes(String(form.destination).trim().toLowerCase())
+  ) {
+    score += 4;
+  }
+  if (keywords.some((keyword) => haystack.includes(keyword))) score += 5;
+  if (form.activityStyle === "luxury" && /hotel|resort/i.test(service.serviceType)) {
+    score += 2;
+  }
+  if (form.activityStyle === "adventure" && /activity/i.test(service.serviceType)) {
+    score += 2;
   }
 
-  const data = await response.json();
-  return data.output_text || "No itinerary generated";
+  return score;
+}
+
+function selectPlannerServices(services, form) {
+  const normalized = (services || []).map(normalizePlannerService);
+  const geocoded = normalized.filter(
+    (service) => Number(service.latitude) && Number(service.longitude)
+  );
+  const prioritized = geocoded
+    .map((service) => ({ service, score: scoreService(service, form) }))
+    .sort((a, b) => b.score - a.score || a.service.price - b.service.price)
+    .map((entry) => entry.service);
+
+  const withinBudget = prioritized.filter(
+    (service) => !service.price || service.price <= form.dailyBudget * 1.5
+  );
+  const pool = withinBudget.length ? withinBudget : prioritized;
+  const limit = Math.max(form.numberOfNights * 3, 4);
+  return pool.slice(0, limit);
+}
+
+function hydrateItineraryCoordinates(itinerary, services) {
+  const normalizedServices = (services || []).map(normalizePlannerService);
+  const days = (itinerary?.days || []).map((day) => ({
+    ...day,
+    items: (day.items || []).map((item) => {
+      if (Number(item.latitude) && Number(item.longitude)) return item;
+
+      const lookup = `${item.title || ""} ${item.location || ""} ${item.description || ""}`.toLowerCase();
+      const matched = normalizedServices.find((service) => {
+        const serviceText =
+          `${service.name} ${service.location} ${service.description}`.toLowerCase();
+        return (
+          serviceText.includes(lookup.trim()) ||
+          lookup.includes(service.name.toLowerCase()) ||
+          lookup.includes(service.location.toLowerCase())
+        );
+      });
+
+      if (!matched) return item;
+
+      return {
+        ...item,
+        location: item.location || matched.location,
+        latitude: matched.latitude,
+        longitude: matched.longitude,
+      };
+    }),
+  }));
+
+  const attractions = Array.from(
+    new Set(
+      days.flatMap((day) =>
+        (day.items || []).map((item) => item.title).filter(Boolean)
+      )
+    )
+  ).slice(0, 8);
+
+  const hotelSuggestions = normalizedServices
+    .filter((service) => /hotel|resort/i.test(service.serviceType))
+    .slice(0, 3)
+    .map((service) => service.name);
+
+  return {
+    ...itinerary,
+    days,
+    attractions,
+    hotelSuggestions,
+  };
+}
+
+function ItineraryLeafletMap({ itinerary, fallbackServices }) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const layerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = L.map(containerRef.current, { zoomControl: true }).setView(
+      [34.0, 9.0],
+      6
+    );
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    mapRef.current = map;
+    layerRef.current = L.layerGroup().addTo(map);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      layerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+
+    layer.clearLayers();
+    const bounds = [];
+    const points = [];
+    const items = (itinerary?.days || []).flatMap((day, dayIndex) =>
+      (day.items || []).map((item) => ({ ...item, dayIndex, day: day.day }))
+    );
+
+    items.forEach((item) => {
+      const lat = Number(item.latitude);
+      const lng = Number(item.longitude);
+      if (!lat || !lng) return;
+
+      const color = DAY_COLORS[item.dayIndex % DAY_COLORS.length];
+      const marker = L.circleMarker([lat, lng], {
+        radius: 8,
+        color,
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.9,
+      }).addTo(layer);
+
+      marker.bindPopup(`
+        <div style="min-width: 180px">
+          <strong>Day ${item.day}: ${item.title}</strong><br/>
+          <span>${item.location || "Mapped stop"}</span><br/>
+          <span>${item.description || ""}</span>
+        </div>
+      `);
+
+      bounds.push([lat, lng]);
+      points.push([lat, lng]);
+    });
+
+    if (points.length > 1) {
+      L.polyline(points, {
+        color: "#0f172a",
+        weight: 3,
+        opacity: 0.65,
+        dashArray: "8 6",
+      }).addTo(layer);
+    }
+
+    if (!bounds.length) {
+      (fallbackServices || []).forEach((service) => {
+        const lat = Number(service.latitude);
+        const lng = Number(service.longitude);
+        if (!lat || !lng) return;
+        L.circleMarker([lat, lng], {
+          radius: 6,
+          color: "#64748b",
+          weight: 1,
+          fillColor: "#94a3b8",
+          fillOpacity: 0.7,
+        })
+          .bindPopup(
+            `<strong>${service.name}</strong><br/>${service.location || ""}`
+          )
+          .addTo(layer);
+        bounds.push([lat, lng]);
+      });
+    }
+
+    if (bounds.length) {
+      map.fitBounds(bounds, { padding: [24, 24] });
+    } else {
+      map.setView([34.0, 9.0], 6);
+    }
+  }, [itinerary, fallbackServices]);
+
+  return <div ref={containerRef} className="h-[460px] w-full rounded-xl" />;
 }
 
 export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
   const [form, setForm] = useState({
-    destination: "Bali",
-    budget: 2500,
-    dates: 5,
-    preference: "adventure",
+    destination: "Tunisia",
+    dailyBudget: 200,
+    numberOfNights: 3,
+    activityStyle: "adventure",
   });
-  const [chat, setChat] = useState([
-    {
-      id: 1,
-      role: "assistant",
-      content:
-        "Share destination, budget, days, and style. I can generate a full itinerary.",
-    },
-  ]);
+  const [services, setServices] = useState([]);
+  const [matchedServices, setMatchedServices] = useState([]);
   const [itinerary, setItinerary] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [liveApi, setLiveApi] = useState(false);
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const [error, setError] = useState("");
 
-  const prompt = useMemo(() => {
-    return `Generate a detailed travel itinerary for ${
-      form.destination
-    } within ${formatCurrency(form.budget)} for ${
-      form.dates
-    } days. Preferences: ${
-      form.preference
-    }. Output day-by-day activities, 3 hotel suggestions, top attractions, and estimated costs.`;
-  }, [form]);
+  const totalBudget = useMemo(
+    () => Number(form.dailyBudget || 0) * Number(form.numberOfNights || 0),
+    [form.dailyBudget, form.numberOfNights]
+  );
+
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        const rows = await fetchServices();
+        setServices((rows || []).map(normalizePlannerService));
+      } catch (err) {
+        console.error("Failed to load services for planner:", err);
+        setError("Unable to load mapped services for AI planning.");
+      }
+    };
+
+    loadServices();
+  }, []);
 
   const generate = async () => {
     setBusy(true);
-    setChat((prev) => [
-      ...prev,
-      { id: Date.now(), role: "user", content: prompt },
-    ]);
+    setError("");
+
     try {
-      if (liveApi && apiKey) {
-        const content = await generateWithOpenAI(prompt, apiKey);
-        setChat((prev) => [
-          ...prev,
-          { id: Date.now() + 1, role: "assistant", content },
-        ]);
+      const selectedServices = selectPlannerServices(services, form);
+      setMatchedServices(selectedServices);
+
+      if (!selectedServices.length) {
+        throw new Error(
+          "No geocoded services are available for this planner request."
+        );
       }
-      const generated = buildMockItinerary(form);
-      setItinerary(generated);
-      setChat((prev) => [
-        ...prev,
-        { id: Date.now() + 2, role: "assistant", content: generated.summary },
-      ]);
+
+      const payload = {
+        client: {
+          no: "AI-PLANNER",
+          name: "Navigo Planner",
+          preferences: form.activityStyle,
+        },
+        reservation: {
+          reservationNo: `PLAN-${Date.now()}`,
+          clientNo: "AI-PLANNER",
+          serviceCode: selectedServices[0]?.id ?? "",
+          reservationDate: new Date().toISOString().slice(0, 10),
+          status: "Planned",
+        },
+        services: selectedServices.map((service) => ({
+          code: service.id,
+          name: service.name,
+          serviceType: service.serviceType,
+          destination: service.location,
+          price: service.price,
+          description: service.description,
+          latitude: service.latitude,
+          longitude: service.longitude,
+          imageUrl: service.imageUrl,
+        })),
+        days: Number(form.numberOfNights),
+        destination: form.destination,
+        activityStyle: form.activityStyle,
+        dailyBudget: Number(form.dailyBudget),
+        totalBudget,
+        numberOfNights: Number(form.numberOfNights),
+      };
+
+      const response = await generatePlannerItinerary(payload);
+      const hydrated = hydrateItineraryCoordinates(response, selectedServices);
+      hydrated.planningContext = {
+        dailyBudget: Number(form.dailyBudget),
+        totalBudget,
+        numberOfNights: Number(form.numberOfNights),
+        matchedServices: selectedServices.length,
+      };
+      setItinerary(hydrated);
+    } catch (err) {
+      console.error("AI planner generation failed:", err);
+      setError(
+        err?.response?.data?.detail ||
+          err.message ||
+          "Failed to generate the AI itinerary."
+      );
     } finally {
       setBusy(false);
     }
   };
 
+  const saveForm = {
+    destination: form.destination,
+    dates: form.numberOfNights,
+    budget: totalBudget,
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-3">
-      <Panel title="Itinerary Input">
+      <Panel title="Planner Input">
         <div className="space-y-3">
           <Input
             value={form.destination}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, destination: e.target.value }))
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, destination: event.target.value }))
             }
             placeholder="Destination"
           />
           <Input
             type="number"
-            value={form.budget}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, budget: Number(e.target.value) }))
+            value={form.dailyBudget}
+            onChange={(event) =>
+              setForm((prev) => ({
+                ...prev,
+                dailyBudget: Number(event.target.value),
+              }))
             }
-            placeholder="Budget"
+            placeholder="Daily Budget"
           />
           <Input
             type="number"
-            value={form.dates}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, dates: Number(e.target.value) }))
+            value={form.numberOfNights}
+            onChange={(event) =>
+              setForm((prev) => ({
+                ...prev,
+                numberOfNights: Number(event.target.value),
+              }))
             }
-            placeholder="Days"
+            placeholder="Number of Nights"
           />
           <Select
-            value={form.preference}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, preference: e.target.value }))
+            value={form.activityStyle}
+            onChange={(event) =>
+              setForm((prev) => ({
+                ...prev,
+                activityStyle: event.target.value,
+              }))
             }
           >
-            <option value="luxury">Luxury</option>
             <option value="adventure">Adventure</option>
+            <option value="luxury">Luxury</option>
             <option value="family">Family</option>
             <option value="culture">Culture</option>
           </Select>
-          <label className="flex items-center gap-2 text-xs text-slate-500">
-            <input
-              type="checkbox"
-              checked={liveApi && Boolean(apiKey)}
-              onChange={(e) => setLiveApi(e.target.checked)}
-            />
-            Use live AI API{" "}
-            {apiKey ? "" : "(add VITE_OPENAI_API_KEY to enable)"}
-          </label>
+          <div className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">
+            <p>
+              Daily budget: <strong>{formatCurrency(form.dailyBudget)}</strong>
+            </p>
+            <p>
+              Nights: <strong>{form.numberOfNights}</strong>
+            </p>
+            <p>
+              Total budget: <strong>{formatCurrency(totalBudget)}</strong>
+            </p>
+          </div>
+          {error ? (
+            <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">
+              {error}
+            </div>
+          ) : null}
           <Button onClick={generate} className="w-full" disabled={busy}>
             {busy ? "Generating..." : "Generate Plan"}
-          </Button>
-          <Button variant="ghost" onClick={generate} className="w-full">
-            Regenerate Plan
           </Button>
         </div>
       </Panel>
 
-      <Panel title="AI Chat Interface">
-        <div className="h-[460px] space-y-3 overflow-auto rounded-xl bg-slate-100 p-3 dark:bg-slate-800">
-          {chat.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${
-                message.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div
-                className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${
-                  message.role === "user"
-                    ? "bg-brand-600 text-white"
-                    : "bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                }`}
-              >
-                <div className="mb-1 flex items-center gap-2 text-[11px] opacity-80">
-                  {message.role === "user" ? (
-                    <UserRound className="h-3 w-3" />
-                  ) : (
-                    <Bot className="h-3 w-3" />
-                  )}
-                  {message.role}
-                </div>
-                {message.content}
-              </div>
-            </div>
-          ))}
+      <Panel title="Leaflet Map">
+        <div className="space-y-3">
+          <ItineraryLeafletMap
+            itinerary={itinerary}
+            fallbackServices={matchedServices}
+          />
+          <p className="text-xs text-slate-500">
+            <MapPinned className="mr-1 inline h-3 w-3" />
+            The map uses itinerary coordinates first, then falls back to the
+            matched service coordinates if needed.
+          </p>
         </div>
       </Panel>
 
       <Panel title="Generated Itinerary">
         {!itinerary ? (
           <p className="text-sm text-slate-500">
-            Generate plan to preview editable itinerary.
+            Generate a plan to preview the AI itinerary and plotted route.
           </p>
         ) : (
           <div className="space-y-3 text-sm">
@@ -225,29 +446,38 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
               <p className="font-medium text-slate-800 dark:text-slate-100">
                 {itinerary.summary}
               </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Matched services: {itinerary.planningContext?.matchedServices} |
+                Daily budget {formatCurrency(itinerary.planningContext?.dailyBudget)} |
+                Total budget {formatCurrency(itinerary.planningContext?.totalBudget)}
+              </p>
             </div>
             <div>
-              <p className="mb-2 font-medium">Hotels</p>
-              <ul className="space-y-1">
-                {itinerary.hotelSuggestions.map((hotel) => (
-                  <li key={hotel}>• {hotel}</li>
+              <p className="mb-2 font-medium">Highlights</p>
+              <ul className="space-y-1 text-xs">
+                {(itinerary.attractions || []).map((item) => (
+                  <li key={item}>• {item}</li>
                 ))}
               </ul>
             </div>
             <div>
               <p className="mb-2 font-medium">Daily Plan</p>
-              <div className="max-h-40 space-y-2 overflow-auto">
-                {itinerary.days.map((day) => (
+              <div className="max-h-56 space-y-2 overflow-auto">
+                {(itinerary.days || []).map((day) => (
                   <div
                     key={day.day}
                     className="rounded-lg border border-slate-200 p-2 dark:border-slate-700"
                   >
                     <p className="font-medium">
-                      {day.title} ({formatCurrency(day.estimatedCost)})
+                      Day {day.day} {day.theme ? `- ${day.theme}` : ""}
                     </p>
-                    <ul className="text-xs">
-                      {day.activities.map((item) => (
-                        <li key={item}>• {item}</li>
+                    <ul className="mt-1 space-y-1 text-xs">
+                      {(day.items || []).map((item) => (
+                        <li key={`${day.day}-${item.title}-${item.time || ""}`}>
+                          • {item.time ? `${item.time} ` : ""}
+                          {item.title}
+                          {item.location ? `, ${item.location}` : ""}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -257,13 +487,13 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
             <div className="grid gap-2 md:grid-cols-2">
               <Button
                 variant="success"
-                onClick={() => onSaveAsTrip(itinerary, form)}
+                onClick={() => onSaveAsTrip(itinerary, saveForm)}
               >
                 Save as Trip
               </Button>
               <Button
                 onClick={() =>
-                  onConvertToBooking(itinerary, form, clients[0]?.id)
+                  onConvertToBooking(itinerary, saveForm, clients[0]?.id)
                 }
               >
                 Convert to Booking
@@ -271,7 +501,8 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
             </div>
             <p className="text-xs text-slate-500">
               <Sparkles className="mr-1 inline h-3 w-3" />
-              Itinerary remains editable through input updates and regenerate.
+              The planner now uses the backend generator and plots the result on
+              Leaflet.
             </p>
           </div>
         )}

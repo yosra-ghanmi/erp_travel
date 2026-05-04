@@ -14,6 +14,8 @@ export function ClientsPage({
   clients,
   setClients,
   bookings,
+  reservations,
+  services,
   canDelete,
   agencyId,
   searchQuery,
@@ -140,7 +142,19 @@ export function ClientsPage({
               <td className="px-2 py-3">{client.country}</td>
               <td className="px-2 py-3">
                 <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => selectClient(client)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      console.log("=== Selected client ===", client);
+                      console.log(
+                        "=== All Bookings ===",
+                        JSON.stringify(bookings, null, 2)
+                      );
+                      console.log("=== All Reservations ===", reservations);
+                      console.log("=== All Services ===", services);
+                      selectClient(client);
+                    }}
+                  >
                     Edit
                   </Button>
                   {canDelete ? (
@@ -226,17 +240,84 @@ export function ClientsPage({
                   Booking History
                 </p>
                 <div className="space-y-2">
-                  {bookings
-                    .filter((booking) => booking.clientId === editingId)
-                    .map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700"
-                      >
-                        {booking.destination} ({booking.startDate}) -{" "}
-                        {booking.status}
-                      </div>
-                    ))}
+                  {(() => {
+                    console.log("Filtering bookings for editingId:", editingId);
+                    const filteredBookings = bookings.filter((booking) => {
+                      const match =
+                        String(booking.clientId) === String(editingId) ||
+                        String(booking.clientNo) === String(editingId) ||
+                        String(booking.clientno) === String(editingId);
+                      if (match) console.log("Matching booking:", booking);
+                      return match;
+                    });
+                    const filteredReservations = reservations.filter(
+                      (reservation) => {
+                        const match =
+                          String(reservation.clientId) === String(editingId) ||
+                          String(reservation.clientNo) === String(editingId) ||
+                          String(reservation.clientno) === String(editingId);
+                        if (match)
+                          console.log("Matching reservation:", reservation);
+                        return match;
+                      }
+                    );
+                    console.log(
+                      "Filtered bookings count:",
+                      filteredBookings.length
+                    );
+                    console.log(
+                      "Filtered reservations count:",
+                      filteredReservations.length
+                    );
+
+                    return (
+                      <>
+                        {filteredBookings.map((booking) => (
+                          <div
+                            key={booking.id}
+                            className="rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700"
+                          >
+                            <p className="font-medium">
+                              Trip: {booking.destination}
+                            </p>
+                            <p>
+                              Date: {booking.startDate} - {booking.status}
+                            </p>
+                            {booking.amount > 0 && (
+                              <p>Amount: ${booking.amount}</p>
+                            )}
+                          </div>
+                        ))}
+                        {filteredReservations.map((reservation) => {
+                          const service = services.find(
+                            (s) =>
+                              String(s.id) === String(reservation.serviceId) ||
+                              String(s.code) === String(reservation.serviceId)
+                          );
+                          return (
+                            <div
+                              key={reservation.id}
+                              className="rounded-lg border border-slate-200 p-2 text-xs dark:border-slate-700"
+                            >
+                              <p className="font-medium">
+                                Service:{" "}
+                                {service?.name ||
+                                  reservation.serviceName ||
+                                  "Unknown Service"}
+                              </p>
+                              {service?.category && (
+                                <p>Category: {service.category}</p>
+                              )}
+                              {service?.price && <p>Price: ${service.price}</p>}
+                              <p>
+                                Date: {reservation.at} - {reservation.status}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </>

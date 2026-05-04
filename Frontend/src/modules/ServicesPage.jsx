@@ -292,26 +292,32 @@ export function ServicesPage({
               {error}
             </div>
           )}
-          <div className="mb-3 grid gap-2 md:grid-cols-2">
-            <Select
-              value={selectedClientId}
-              onChange={(event) => setSelectedClientId(event.target.value)}
-            >
-              <option value="">Select client to use service</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </Select>
-            {message ? (
-              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                {message}
-              </p>
-            ) : null}
-          </div>
+          {role !== "superadmin" && role !== "admin" && role !== "agent" && (
+            <div className="mb-3 grid gap-2 md:grid-cols-2">
+              <Select
+                value={selectedClientId}
+                onChange={(event) => setSelectedClientId(event.target.value)}
+              >
+                <option value="">Select client to use service</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </Select>
+              {message ? (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                  {message}
+                </p>
+              ) : null}
+            </div>
+          )}
           <DataTable
-            headers={["Service", "Category", "Price", "Status", "Actions"]}
+            headers={
+              role === "admin" || role === "agent"
+                ? ["Service", "Category", "Price", "Status"]
+                : ["Service", "Category", "Price", "Status", "Actions"]
+            }
             rows={agencyServices.map((service) => (
               <tr
                 key={service.id}
@@ -347,33 +353,39 @@ export function ServicesPage({
                     value={service.active ? "active" : "suspended"}
                   />
                 </td>
-                <td className="px-2 py-3">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="success"
-                      onClick={() => assignService(service.id)}
-                      disabled={!selectedClientId}
-                    >
-                      Use
-                    </Button>
-                    {canManage ? (
-                      <Button
-                        variant="ghost"
-                        onClick={() => startEdit(service)}
-                      >
-                        Edit
-                      </Button>
-                    ) : null}
-                    {canManage ? (
-                      <Button
-                        variant="danger"
-                        onClick={() => removeService(service.id)}
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
-                  </div>
-                </td>
+                {role !== "admin" && role !== "agent" && (
+                  <td className="px-2 py-3">
+                    <div className="flex gap-2">
+                      {role !== "superadmin" &&
+                        role !== "admin" &&
+                        role !== "agent" && (
+                          <Button
+                            variant="success"
+                            onClick={() => assignService(service.id)}
+                            disabled={!selectedClientId}
+                          >
+                            Use
+                          </Button>
+                        )}
+                      {canManage ? (
+                        <Button
+                          variant="ghost"
+                          onClick={() => startEdit(service)}
+                        >
+                          Edit
+                        </Button>
+                      ) : null}
+                      {canManage ? (
+                        <Button
+                          variant="danger"
+                          onClick={() => removeService(service.id)}
+                        >
+                          Delete
+                        </Button>
+                      ) : null}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           />

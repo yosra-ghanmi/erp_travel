@@ -9,13 +9,29 @@ logger = logging.getLogger(__name__)
 
 def build_travel_prompt(req: GenerateRequest) -> str:
     """Builds a sophisticated prompt for the AI model."""
-    days = req.days or max(1, len(req.services))
+    days = req.days or req.number_of_nights or max(1, len(req.services))
+    preferences = req.client.preferences or req.client.notes or "None specified"
+    activity_style = req.activity_style or "flexible"
+    budget_lines = []
+    if req.daily_budget is not None:
+        budget_lines.append(f"- Daily budget: ${req.daily_budget:.2f}")
+    if req.total_budget is not None:
+        budget_lines.append(f"- Total budget: ${req.total_budget:.2f}")
+    if req.number_of_nights is not None:
+        budget_lines.append(f"- Nights: {req.number_of_nights}")
+    if req.destination:
+        budget_lines.append(f"- Destination: {req.destination}")
+    budget_block = "\n".join(budget_lines) if budget_lines else "- Budget: Not specified"
     
     prompt = f"""You are an expert travel agent. Create a detailed, engaging {days}-day travel itinerary for a client.
 
 Client Information:
 - Name: {req.client.name}
-- Preferences: {req.client.preferences or 'None specified'}
+- Preferences: {preferences}
+- Style: {activity_style}
+
+Planning Constraints:
+{budget_block}
 
 Reservation Details:
 - Reservation No: {req.reservation.reservation_no}
@@ -40,6 +56,8 @@ Requirements:
 3. Include estimated times for each activity.
 4. Provide travel tips and local recommendations.
 5. Ensure the itinerary flows logically based on locations.
+6. Respect the requested style and budget.
+7. Use the provided coordinates and locations whenever possible.
 
 You MUST respond with ONLY a valid JSON object matching this exact structure:
 {{
@@ -147,6 +165,7 @@ def _generate_summary(req: GenerateRequest, days: List[ItineraryDay]) -> str:
     return "\n".join(lines)
 
 def _fallback_itinerary(req: GenerateRequest, source: str = "fallback", ai_data: Dict[str, Any] = None) -> GenerateResponse:
+    client_id = getattr(req.client, "id", None) or req.client.no
     if ai_data:
         try:
             days = []
@@ -169,7 +188,7 @@ def _fallback_itinerary(req: GenerateRequest, source: str = "fallback", ai_data:
                 ))
             
             return GenerateResponse(
-                client_id=req.client.id,
+                client_id=client_id,
                 reservation_no=req.reservation.reservation_no,
                 title=ai_data.get("title"),
                 summary=ai_data.get("summary") or _generate_summary(req, days),
@@ -210,7 +229,7 @@ def _fallback_itinerary(req: GenerateRequest, source: str = "fallback", ai_data:
     summary = _generate_summary(req, items)
         
     return GenerateResponse(
-        client_id=req.client.id, 
+        client_id=client_id, 
         reservation_no=req.reservation.reservation_no, 
         title=f"Itinerary for {req.client.name}",
         summary=summary,

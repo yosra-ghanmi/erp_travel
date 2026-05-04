@@ -37,6 +37,11 @@ export const generateItinerary = async (travelOfferId) => {
   return data;
 };
 
+export const generatePlannerItinerary = async (payload) => {
+  const { data } = await api.post("/generate", payload);
+  return data;
+};
+
 export const createTravelOffer = async (offerData) => {
   const { data } = await api.post("/api/travel-offers", offerData);
   return data;

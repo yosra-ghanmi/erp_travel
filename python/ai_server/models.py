@@ -11,6 +11,7 @@ class Client(BaseModel):
     phone: Optional[str] = Field(None, description="Client phone number")
     country: Optional[str] = Field(None, description="Client country")
     notes: Optional[str] = Field(None, description="Additional notes")
+    preferences: Optional[str] = Field(None, description="Travel preferences or style")
 
 
 class ClientCreate(BaseModel):
@@ -184,6 +185,22 @@ class GenerateRequest(BaseModel):
     reservation: Reservation
     services: List[TravelService] = Field(default_factory=list)
     days: Optional[int] = Field(None, description="Number of days for itinerary")
+    destination: Optional[str] = Field(None, description="Trip destination")
+    activity_style: Optional[str] = Field(
+        None, alias="activityStyle", description="Requested activity style"
+    )
+    daily_budget: Optional[float] = Field(
+        None, alias="dailyBudget", description="Daily budget"
+    )
+    total_budget: Optional[float] = Field(
+        None, alias="totalBudget", description="Total trip budget"
+    )
+    number_of_nights: Optional[int] = Field(
+        None, alias="numberOfNights", description="Number of nights"
+    )
+
+    class Config:
+        populate_by_name = True
 
 
 class GenerateResponse(BaseModel):
