@@ -17,6 +17,7 @@ import {
   sendEmail,
   fetchInvoiceLines,
   deleteInvoice,
+  deletePayment,
 } from "../services/erpApi";
 
 const initialForm = {
@@ -322,6 +323,30 @@ export function PaymentsPage({ searchQuery }) {
     }
   };
 
+  const handleDeletePayment = async (paymentId) => {
+    if (!window.confirm(`Are you sure you want to delete payment ${paymentId}?`))
+      return;
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      await deletePayment(paymentId);
+      setPayments((prev) =>
+        prev.filter(
+          (payment) =>
+            (payment.paymentid || payment.paymentId || payment.id) !== paymentId
+        )
+      );
+      setMessage(`Payment ${paymentId} deleted successfully.`);
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail || err.message || "Failed to delete payment";
+      setError(`Delete Error: ${detail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-3">
@@ -495,7 +520,14 @@ export function PaymentsPage({ searchQuery }) {
         }
       >
         <DataTable
-          headers={["Payment ID", "Invoice No.", "Method", "Amount", "Date"]}
+          headers={[
+            "Payment ID",
+            "Invoice No.",
+            "Method",
+            "Amount",
+            "Date",
+            "Actions",
+          ]}
           rows={payments.map((payment) => {
             const pId = payment.paymentid || payment.paymentId || payment.id;
             const iNo = payment.invoiceno || payment.invoiceNo;
@@ -513,6 +545,17 @@ export function PaymentsPage({ searchQuery }) {
                   ${payment.amount}
                 </td>
                 <td className="px-2 py-3 text-xs">{payment.date}</td>
+                <td className="px-2 py-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeletePayment(pId)}
+                    title="Delete Payment"
+                    className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    Delete
+                  </Button>
+                </td>
               </tr>
             );
           })}

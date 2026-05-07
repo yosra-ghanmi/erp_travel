@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPinned, Sparkles } from "lucide-react";
 import { Button, Input, Panel, Select } from "../components/ui";
-import { fetchServices, generatePlannerItinerary } from "../services/erpApi";
+import {
+  createQuote,
+  fetchServices,
+  generatePlannerItinerary,
+} from "../services/erpApi";
 
 const formatCurrency = (value) =>
   `$${Math.round(Number(value || 0)).toLocaleString()}`;
@@ -50,7 +55,8 @@ function normalizePlannerService(service) {
 }
 
 function scoreService(service, form) {
-  const haystack = `${service.name} ${service.serviceType} ${service.location} ${service.description}`.toLowerCase();
+  const haystack =
+    `${service.name} ${service.serviceType} ${service.location} ${service.description}`.toLowerCase();
   const keywords = STYLE_KEYWORDS[form.activityStyle] ?? [];
   let score = 0;
 
@@ -64,10 +70,16 @@ function scoreService(service, form) {
     score += 4;
   }
   if (keywords.some((keyword) => haystack.includes(keyword))) score += 5;
-  if (form.activityStyle === "luxury" && /hotel|resort/i.test(service.serviceType)) {
+  if (
+    form.activityStyle === "luxury" &&
+    /hotel|resort/i.test(service.serviceType)
+  ) {
     score += 2;
   }
-  if (form.activityStyle === "adventure" && /activity/i.test(service.serviceType)) {
+  if (
+    form.activityStyle === "adventure" &&
+    /activity/i.test(service.serviceType)
+  ) {
     score += 2;
   }
 
@@ -99,7 +111,9 @@ function hydrateItineraryCoordinates(itinerary, services) {
     items: (day.items || []).map((item) => {
       if (Number(item.latitude) && Number(item.longitude)) return item;
 
-      const lookup = `${item.title || ""} ${item.location || ""} ${item.description || ""}`.toLowerCase();
+      const lookup = `${item.title || ""} ${item.location || ""} ${
+        item.description || ""
+      }`.toLowerCase();
       const matched = normalizedServices.find((service) => {
         const serviceText =
           `${service.name} ${service.location} ${service.description}`.toLowerCase();
@@ -247,18 +261,21 @@ function ItineraryLeafletMap({ itinerary, fallbackServices }) {
   return <div ref={containerRef} className="h-[460px] w-full rounded-xl" />;
 }
 
-export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
+export function AIPlannerPage({ clients }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     destination: "Tunisia",
     dailyBudget: 200,
     numberOfNights: 3,
     activityStyle: "adventure",
+    clientNo: "",
   });
   const [services, setServices] = useState([]);
   const [matchedServices, setMatchedServices] = useState([]);
   const [itinerary, setItinerary] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const totalBudget = useMemo(
     () => Number(form.dailyBudget || 0) * Number(form.numberOfNights || 0),
@@ -279,9 +296,19 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
     loadServices();
   }, []);
 
+  useEffect(() => {
+    if (!form.clientNo && clients?.length) {
+      setForm((prev) => ({
+        ...prev,
+        clientNo: clients[0].id || clients[0].no,
+      }));
+    }
+  }, [clients, form.clientNo]);
+
   const generate = async () => {
     setBusy(true);
     setError("");
+    setMessage("");
 
     try {
       const selectedServices = selectPlannerServices(services, form);
@@ -346,10 +373,59 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
     }
   };
 
-  const saveForm = {
-    destination: form.destination,
-    dates: form.numberOfNights,
-    budget: totalBudget,
+  const handleCreateQuote = async () => {
+    if (!itinerary) return;
+    if (!form.clientNo) {
+      setError("Select a client before creating a quote.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      // Calculate total cost based on matched services prices
+      const totalCost = matchedServices.reduce(
+        (sum, service) => sum + (service.price || 0),
+        0
+      );
+
+      const quoteData = {
+        clientNo: form.clientNo,
+        lineType: "Service",
+        quantity: 1,
+        numberOfNights: Number(form.numberOfNights),
+        discount_percent: 0,
+        quoteDate: "2026-01-15",
+        validUntilDate: "2026-02-15",
+        status: "Draft",
+        subtotal: totalCost,
+        totalAmount: totalCost,
+        serviceItems: matchedServices.map((service) => ({
+          lineType: "Service",
+          serviceCode: service.id,
+          quantity: 1,
+          numberOfNights: 1,
+        })),
+      };
+
+      const result = await createQuote(quoteData);
+      const quoteNo = result.quoteno || result.quoteNo || "new quote";
+      setMessage(`Quote ${quoteNo} created successfully.`);
+
+      // Navigate to quotes page after successful creation
+      setTimeout(() => {
+        navigate("/app/quotes");
+      }, 1500);
+    } catch (err) {
+      console.error("Failed to create quote from itinerary:", err);
+      setError(
+        err?.response?.data?.detail || err.message || "Failed to create quote."
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -386,6 +462,22 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
             placeholder="Number of Nights"
           />
           <Select
+            value={form.clientNo}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, clientNo: event.target.value }))
+            }
+          >
+            <option value="">Select Client</option>
+            {(clients || []).map((client) => {
+              const clientId = client.id || client.no;
+              return (
+                <option key={clientId} value={clientId}>
+                  {client.name || clientId}
+                </option>
+              );
+            })}
+          </Select>
+          <Select
             value={form.activityStyle}
             onChange={(event) =>
               setForm((prev) => ({
@@ -413,6 +505,11 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
           {error ? (
             <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-900/20 dark:text-rose-300">
               {error}
+            </div>
+          ) : null}
+          {message ? (
+            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+              {message}
             </div>
           ) : null}
           <Button onClick={generate} className="w-full" disabled={busy}>
@@ -448,8 +545,9 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
               </p>
               <p className="mt-2 text-xs text-slate-500">
                 Matched services: {itinerary.planningContext?.matchedServices} |
-                Daily budget {formatCurrency(itinerary.planningContext?.dailyBudget)} |
-                Total budget {formatCurrency(itinerary.planningContext?.totalBudget)}
+                Daily budget{" "}
+                {formatCurrency(itinerary.planningContext?.dailyBudget)} | Total
+                budget {formatCurrency(itinerary.planningContext?.totalBudget)}
               </p>
             </div>
             <div>
@@ -484,21 +582,42 @@ export function AIPlannerPage({ onSaveAsTrip, onConvertToBooking, clients }) {
                 ))}
               </div>
             </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <Button
-                variant="success"
-                onClick={() => onSaveAsTrip(itinerary, saveForm)}
-              >
-                Save as Trip
-              </Button>
-              <Button
-                onClick={() =>
-                  onConvertToBooking(itinerary, saveForm, clients[0]?.id)
-                }
-              >
-                Convert to Booking
-              </Button>
+            <div>
+              <p className="mb-2 font-medium">Cost Breakdown</p>
+              <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <div className="space-y-1 text-xs">
+                  {(matchedServices || []).map((service) => (
+                    <div key={service.id} className="flex justify-between">
+                      <span>{service.name}</span>
+                      <span className="font-medium">
+                        {formatCurrency(service.price)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="mt-2 border-t border-slate-300 pt-2 dark:border-slate-600">
+                    <div className="flex justify-between font-semibold">
+                      <span>Total Estimated Cost</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(
+                          matchedServices.reduce(
+                            (sum, service) => sum + (service.price || 0),
+                            0
+                          )
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+            <Button
+              variant="success"
+              className="w-full"
+              onClick={handleCreateQuote}
+              disabled={busy || !matchedServices.length}
+            >
+              {busy ? "Processing..." : "Create Quote"}
+            </Button>
             <p className="text-xs text-slate-500">
               <Sparkles className="mr-1 inline h-3 w-3" />
               The planner now uses the backend generator and plots the result on

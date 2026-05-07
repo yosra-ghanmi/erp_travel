@@ -141,20 +141,15 @@ function PremiumStatCard({ title, value, trend, hint, icon }) {
 }
 
 export function PlatformOverviewPage({
+  overview,
   agencies,
-  users,
-  bookings,
-  payments,
-  aiLogs,
 }) {
-  const activeAgencies = agencies.filter(
-    (agency) => agency.subscription_status === "active"
-  ).length;
-  const monthlyRevenue = payments
-    .filter((payment) => payment.status === "paid")
-    .reduce((sum, payment) => sum + payment.amount, 0);
-  const tenantUsers = users.filter((user) => user.role !== "superadmin").length;
-  const totalAiCost = aiLogs.reduce((sum, item) => sum + item.cost, 0);
+  const activeAgencies = overview?.activeAgencyCount ?? 0;
+  const totalRevenue = overview?.totalRevenue ?? 0;
+  const activeHrUsers = overview?.activeHrUsers ?? 0;
+  const registrationTrends = overview?.userRegistrationTrends ?? [];
+  const systemLogs = overview?.systemLogs ?? [];
+  const latestTrend = registrationTrends.at(-1);
 
   return (
     <div className="space-y-8">
@@ -173,36 +168,82 @@ export function PlatformOverviewPage({
         <PremiumStatCard
           title="Active Tenants"
           value={activeAgencies}
-          trend="+5% this month"
+          trend={`${agencies.length} agencies total`}
           hint={`${agencies.length} total agencies`}
           icon={<StatIconTenants />}
         />
         <PremiumStatCard
           title="Platform Revenue"
-          value={`$${monthlyRevenue.toLocaleString()}`}
-          trend="+12% this month"
-          hint="Paid bookings"
+          value={`$${totalRevenue.toLocaleString()}`}
+          trend="Live payment aggregate"
+          hint="Sum of payments"
           icon={<StatIconRevenue />}
         />
         <PremiumStatCard
-          title="AI Spend"
-          value={`$${totalAiCost.toFixed(2)}`}
-          trend="+4% this month"
-          hint={`${aiLogs.length} AI requests`}
+          title="HR Visibility"
+          value={activeHrUsers}
+          trend="Platform-wide role access"
+          hint="Active HR users"
           icon={<StatIconNeural />}
         />
         <PremiumStatCard
-          title="Tenant Users"
-          value={tenantUsers}
-          trend="+7% this month"
-          hint={`${bookings.length} total bookings`}
+          title="Registrations"
+          value={latestTrend?.count ?? 0}
+          trend={latestTrend?.month ?? "No trend data"}
+          hint="Latest monthly signups"
           icon={<StatIconTenants />}
         />
       </div>
+      <Panel title="User Registration Trends">
+        <div className="space-y-2">
+          {registrationTrends.length > 0 ? (
+            registrationTrends.map((item) => (
+              <div
+                key={item.month}
+                className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800"
+              >
+                <span className="text-slate-600 dark:text-slate-300">
+                  {item.month}
+                </span>
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {item.count}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              No user registration data available.
+            </p>
+          )}
+        </div>
+      </Panel>
+      <Panel title="Real-Time System Logs">
+        <div className="space-y-2">
+          {systemLogs.length > 0 ? (
+            systemLogs.map((log, index) => (
+              <div
+                key={`${log.created_at}-${index}`}
+                className="rounded-xl bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800"
+              >
+                <p className="font-medium text-slate-800 dark:text-slate-100">
+                  {log.level}: {log.message}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {log.created_at}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              No system logs available.
+            </p>
+          )}
+        </div>
+      </Panel>
       <Panel title="Super Admin Visibility">
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Super admin sees global totals only. Agency-level client and booking
-          detail views are isolated from this role.
+          Superadmin metrics are global, and the HR role remains visible across
+          the platform for workforce oversight.
         </p>
       </Panel>
     </div>

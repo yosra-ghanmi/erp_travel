@@ -1,12 +1,25 @@
 import { useState } from 'react'
 import { Button, Input, Panel } from '../components/ui'
 
-export function SystemSettingsPage({ settings, setSettings }) {
+export function SystemSettingsPage({ settings, setSettings, onSave }) {
   const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const saveSettings = () => {
-    setSettings((prev) => ({ ...prev }))
-    setMessage('Settings saved successfully.')
+  const saveChanges = async () => {
+    setSaving(true)
+    try {
+      const nextSettings = { ...settings }
+      if (onSave) {
+        await onSave(nextSettings)
+      } else {
+        setSettings((prev) => ({ ...prev }))
+      }
+      setMessage('Settings saved successfully.')
+    } catch (error) {
+      setMessage(error.message || 'Failed to save settings.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const rotateApiKeys = () => {
@@ -55,7 +68,9 @@ export function SystemSettingsPage({ settings, setSettings }) {
         </Panel>
       </div>
       <div className="flex items-center gap-3">
-        <Button onClick={saveSettings} className="bg-cyan-700 px-6 hover:bg-cyan-800">Save Changes</Button>
+        <Button onClick={saveChanges} className="bg-cyan-700 px-6 hover:bg-cyan-800" disabled={saving}>
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
         {message ? <p className="text-xs text-emerald-600">{message}</p> : null}
       </div>
     </div>

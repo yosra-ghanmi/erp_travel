@@ -11,12 +11,14 @@ import {
   fetchReservations,
   fetchClients,
   fetchServices,
+  deleteBooking,
 } from "../services/erpApi";
 
 export function BookingsPage({
   agencyId,
   reservations: propsReservations,
   bookings: propsBookings,
+  setBookings,
   clients: propsClients,
   services: propsServices,
   searchQuery,
@@ -27,6 +29,39 @@ export function BookingsPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  const handleDeleteBooking = async (booking) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete booking ${booking.displayId}?`
+      )
+    ) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      if (booking.displayType === "Trip") {
+        await deleteBooking(booking.displayId);
+        if (setBookings) {
+          setBookings((prev) =>
+            prev.filter(
+              (b) => (b.id || b.bookingId || b.bookingid) !== booking.displayId
+            )
+          );
+        }
+      }
+      setMessage(`Booking ${booking.displayId} deleted successfully`);
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail || err.message || "Failed to delete booking";
+      setError(`Delete Error: ${detail}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (propsReservations) setReservations(propsReservations);
@@ -148,7 +183,15 @@ export function BookingsPage({
           </div>
         )}
         <DataTable
-          headers={["ID", "Type", "Client", "Service/Trip", "Date", "Status"]}
+          headers={[
+            "ID",
+            "Type",
+            "Client",
+            "Service/Trip",
+            "Date",
+            "Status",
+            "Actions",
+          ]}
           rows={filteredBookings.map((res) => {
             const id = res.displayId;
             const type = res.displayType;
@@ -179,6 +222,18 @@ export function BookingsPage({
                 <td className="px-2 py-3 text-xs">{rDate}</td>
                 <td className="px-2 py-3">
                   <StatusBadge value={status.toLowerCase()} />
+                </td>
+                <td className="px-2 py-3">
+                  {type === "Trip" && (
+                    <Button
+                      variant="danger"
+                      size="small"
+                      onClick={() => handleDeleteBooking(res)}
+                      disabled={loading}
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </td>
               </tr>
             );

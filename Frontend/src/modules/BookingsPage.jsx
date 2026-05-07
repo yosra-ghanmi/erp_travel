@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button, DataTable, Input, Panel, Select } from "../components/ui";
-import { fetchBookings, createBooking, fetchClients } from "../services/erpApi";
+import {
+  fetchBookings,
+  createBooking,
+  deleteBooking,
+  fetchClients,
+} from "../services/erpApi";
 
 const initialForm = {
   clientNo: "",
@@ -74,6 +79,30 @@ export function BookingsPage() {
     });
   };
 
+  const handleDeleteBooking = async (bookingId) => {
+    if (!window.confirm(`Are you sure you want to delete booking ${bookingId}?`)) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      await deleteBooking(bookingId);
+      setBookings((prev) => prev.filter((item) => item.bookingid !== bookingId));
+      if (editingId === bookingId) {
+        setEditingId("");
+        setForm(initialForm);
+      }
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail || err.message || "Failed to delete booking";
+      setError(`Delete Error: ${detail}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-3">
       <div className="xl:col-span-2">
@@ -126,8 +155,19 @@ export function BookingsPage() {
                 <td className="px-2 py-3 font-bold">${booking.amount}</td>
                 <td className="px-2 py-3">
                   <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => startEdit(booking)}>
+                    <Button
+                      variant="ghost"
+                      onClick={() => startEdit(booking)}
+                      disabled={loading}
+                    >
                       Edit
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => handleDeleteBooking(booking.bookingid)}
+                      disabled={loading}
+                    >
+                      Delete
                     </Button>
                   </div>
                 </td>

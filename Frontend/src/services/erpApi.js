@@ -7,6 +7,10 @@ const api = axios.create({
 // Add a request interceptor to inject agency and user headers
 api.interceptors.request.use(
   (config) => {
+    const sessionToken = sessionStorage.getItem("erp_session_token");
+    if (sessionToken) {
+      config.headers["X-Session-Token"] = sessionToken;
+    }
     const savedSession = localStorage.getItem("erp_session");
     if (savedSession) {
       const session = JSON.parse(savedSession);
@@ -143,6 +147,11 @@ export const createBooking = async (bookingData) => {
   return data;
 };
 
+export const deleteBooking = async (bookingId) => {
+  const { data } = await api.delete(`/api/bookings/${bookingId}`);
+  return data;
+};
+
 // Payments
 export const fetchPayments = async () => {
   const { data } = await api.get("/api/payments");
@@ -151,6 +160,11 @@ export const fetchPayments = async () => {
 
 export const createPayment = async (paymentData) => {
   const { data } = await api.post("/api/payments", paymentData);
+  return data;
+};
+
+export const deletePayment = async (paymentId) => {
+  const { data } = await api.delete(`/api/payments/${paymentId}`);
   return data;
 };
 
@@ -255,6 +269,26 @@ export const fetchUsers = async () => {
   return data.users;
 };
 
+export const registerSession = async (sessionToken) => {
+  const { data } = await api.post("/api/sessions/register", { sessionToken });
+  return data;
+};
+
+export const fetchNotifications = async () => {
+  const { data } = await api.get("/api/notifications");
+  return data.notifications;
+};
+
+export const createNotification = async (payload) => {
+  const { data } = await api.post("/api/notifications", payload);
+  return data;
+};
+
+export const markNotificationRead = async (notificationId) => {
+  const { data } = await api.patch(`/api/notifications/${notificationId}/read`);
+  return data;
+};
+
 export const loginUser = async (credentials) => {
   const { data } = await api.post("/api/login", credentials);
   return data.user;
@@ -293,6 +327,26 @@ export const deleteAgency = async (agencyId) => {
 
 export const deleteInvoice = async (invoiceNo) => {
   const { data } = await api.delete(`/api/invoices/${invoiceNo}`);
+  return data;
+};
+
+export const fetchSettings = async () => {
+  const { data } = await api.get("/api/settings");
+  return data.settings;
+};
+
+export const saveSettings = async (settings) => {
+  const { data } = await api.post("/api/settings", settings);
+  return data.settings;
+};
+
+export const updateLanguagePreference = async (language) => {
+  const { data } = await api.post("/api/preferences/language", { language });
+  return data;
+};
+
+export const fetchPlatformOverview = async () => {
+  const { data } = await api.get("/api/platform-overview");
   return data;
 };
 

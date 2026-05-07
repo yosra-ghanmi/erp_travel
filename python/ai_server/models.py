@@ -1,6 +1,6 @@
 from enum import Enum
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -80,12 +80,13 @@ class ExpenseType(str, Enum):
     MARKETING = "Marketing"
     STAFF = "Staff"
     OTHER = "Other"
+    REFUND = "Refund"
 
 
 class Expense(BaseModel):
     expense_id: Optional[str] = Field(None, alias="expenseId")
     source_invoice_id: Optional[str] = Field(None, alias="sourceInvoiceId")
-    recipient_id: str = Field(..., alias="recipientId", description="Agent or Hotel/Provider ID")
+    recipient_id: Optional[str] = Field(None, alias="recipientId", description="Agent or Hotel/Provider ID")
     expense_type: ExpenseType = Field(..., alias="expenseType")
     amount: float
     expense_date: date = Field(default_factory=date.today, alias="date")
@@ -105,10 +106,11 @@ class Expense(BaseModel):
 
 class ExpenseCreate(BaseModel):
     source_invoice_id: Optional[str] = Field(None, alias="sourceInvoiceId")
-    recipient_id: str = Field(..., alias="recipientId")
+    recipient_id: Optional[str] = Field(None, alias="recipientId")
     expense_type: ExpenseType = Field(..., alias="expenseType")
     amount: float
-    expense_date: date = Field(default_factory=date.today, alias="date")
+    date: Optional[str] = Field(None)
+    expense_date: Optional[date] = Field(None, alias="expenseDate")
     description: Optional[str] = None
     document_reference: Optional[str] = Field(None, alias="documentReference")
     ledger_account_no: Optional[str] = Field(None, alias="ledgerAccountNo")
@@ -117,9 +119,10 @@ class ExpenseCreate(BaseModel):
     automation_key: Optional[str] = Field(None, alias="automationKey")
     agent_code: Optional[str] = Field(None, alias="agent_code")
     agency_code: Optional[str] = Field(None, alias="Agency_Code")
-
+    
     class Config:
         populate_by_name = True
+        arbitrary_types_allowed = True
 
 
 class TravelService(BaseModel):
@@ -363,3 +366,58 @@ class PremiumItineraryResponse(BaseModel):
 
 class SyncOffersResponse(BaseModel):
     offers: List[TravelOffer]
+
+
+class NotificationCreate(BaseModel):
+    message: str
+    is_global: bool = Field(False, alias="isGlobal")
+    session_id: Optional[str] = Field(None, alias="sessionId")
+    category: Optional[str] = Field("info")
+
+    class Config:
+        populate_by_name = True
+
+
+class NotificationRecord(BaseModel):
+    id: str
+    user_id: str = Field(..., alias="userId")
+    message: str
+    session_id: Optional[str] = Field(None, alias="sessionId")
+    is_global: bool = Field(False, alias="isGlobal")
+    category: str = "info"
+    is_read: bool = Field(False, alias="isRead")
+    created_at: str = Field(..., alias="createdAt")
+
+    class Config:
+        populate_by_name = True
+
+
+class SessionRegisterRequest(BaseModel):
+    session_token: str = Field(..., alias="sessionToken")
+
+    class Config:
+        populate_by_name = True
+
+
+class UserPreferenceUpdate(BaseModel):
+    language: str
+
+
+class SystemSettingsPayload(BaseModel):
+    trialDays: int = 14
+    aiRateLimit: int = 120
+    currency: str = "USD"
+    sessionTimeout: int = 180
+    mfaSuperAdmin: bool = True
+    strictTenantIsolation: bool = True
+
+
+class PlatformOverviewMetrics(BaseModel):
+    total_revenue: float = Field(..., alias="totalRevenue")
+    active_agency_count: int = Field(..., alias="activeAgencyCount")
+    user_registration_trends: List[Dict] = Field(..., alias="userRegistrationTrends")
+    system_logs: List[Dict] = Field(..., alias="systemLogs")
+    active_hr_users: int = Field(..., alias="activeHrUsers")
+
+    class Config:
+        populate_by_name = True

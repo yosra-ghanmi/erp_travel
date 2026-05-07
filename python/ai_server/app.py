@@ -38,6 +38,10 @@ from models import (
     TravelInvoice,
     TravelPayment,
     EmailRequest,
+    NotificationCreate,
+    SessionRegisterRequest,
+    SystemSettingsPayload,
+    UserPreferenceUpdate,
 )
 from agency_models import Agency, AgencyCreate, AgencyUpdate
 from ai import generate_itinerary
@@ -129,6 +133,32 @@ def scheduled_payroll():
     if is_29th or is_feb_last_day:
         run_monthly_payroll()
 
+
+@scheduler.scheduled_job("interval", days=7)
+def scheduled_payment_cleanup():
+    cutoff = (datetime.utcnow() - timedelta(days=PAYMENT_RETENTION_DAYS)).isoformat()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE payment_history
+            SET deleted_at = COALESCE(deleted_at, ?),
+                deleted_by = COALESCE(deleted_by, 'system'),
+                delete_reason = COALESCE(delete_reason, 'retention_cleanup')
+            WHERE datetime(created_at) <= datetime(?)
+              AND deleted_at IS NULL
+            """,
+            (datetime.utcnow().isoformat(), cutoff),
+        )
+        affected = cursor.rowcount
+        conn.commit()
+        conn.close()
+        if affected:
+            _log_system_event("INFO", f"Soft-deleted {affected} payment history rows older than retention window")
+    except Exception as exc:
+        logger.error(f"Scheduled payment cleanup failed: {exc}")
+
 scheduler.start()
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -153,6 +183,8 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "navigo.sqlite")
 OFFERS_FILE = os.path.join(os.path.dirname(__file__), "travel_offers.json")
 EXPENSES_FILE = os.path.join(os.path.dirname(__file__), "expenses.json")
 PASSWORD_RESET_EXPIRY_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRY_MINUTES", "15"))
+PAYMENT_RETENTION_DAYS = int(os.getenv("PAYMENT_RETENTION_DAYS", "7"))
+SETTINGS_CACHE: Dict[str, object] = {}
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -172,6 +204,228 @@ def _ensure_password_reset_table():
     """)
     conn.commit()
     conn.close()
+
+def _column_exists(cursor: sqlite3.Cursor, table_name: str, column_name: str) -> bool:
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    return any(row["name"] == column_name for row in cursor.fetchall())
+
+
+def _clear_settings_cache():
+    SETTINGS_CACHE.clear()
+
+
+def _log_system_event(level: str, message: str, user_id: Optional[str] = None):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO system_logs (level, message, user_id, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (level.upper(), message, user_id, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        logger.warning(f"Failed to persist system log: {exc}")
+
+
+def _ensure_app_tables():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            session_token TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            session_id TEXT,
+            message TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'info',
+            is_global INTEGER NOT NULL DEFAULT 0,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            read_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(session_id) REFERENCES user_sessions(session_token)
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS payment_history (
+            payment_id TEXT PRIMARY KEY,
+            invoice_no TEXT,
+            client_no TEXT,
+            booking_id TEXT,
+            amount REAL NOT NULL DEFAULT 0,
+            method TEXT,
+            payment_date TEXT,
+            raw_payload TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            deleted_at TEXT,
+            deleted_by TEXT,
+            delete_reason TEXT
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,
+            message TEXT NOT NULL,
+            user_id TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+    if not _column_exists(cursor, "users", "preferred_language"):
+        cursor.execute("ALTER TABLE users ADD COLUMN preferred_language TEXT DEFAULT 'en'")
+    if not _column_exists(cursor, "users", "created_at"):
+        cursor.execute("ALTER TABLE users ADD COLUMN created_at TEXT")
+        cursor.execute(
+            "UPDATE users SET created_at = COALESCE(created_at, ?) WHERE created_at IS NULL",
+            (datetime.utcnow().isoformat(),),
+        )
+
+    default_settings = {
+        "trialDays": 14,
+        "aiRateLimit": 120,
+        "currency": "USD",
+        "sessionTimeout": 180,
+        "mfaSuperAdmin": True,
+        "strictTenantIsolation": True,
+    }
+    now_iso = datetime.utcnow().isoformat()
+    for key, value in default_settings.items():
+        cursor.execute(
+            """
+            INSERT INTO app_settings (setting_key, setting_value, updated_at, updated_by)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(setting_key) DO NOTHING
+            """,
+            (key, json.dumps(value), now_iso, "system"),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def _get_current_user_id(request: Request) -> str:
+    user_id = request.headers.get("X-User-ID") or request.query_params.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing user identity.")
+    return user_id
+
+
+def _get_current_session_token(request: Request) -> str:
+    session_token = request.headers.get("X-Session-Token") or request.query_params.get("session_token")
+    if not session_token:
+        raise HTTPException(status_code=400, detail="Missing session token.")
+    return session_token
+
+
+def _register_session(session_token: str, user_id: str):
+    now_iso = datetime.utcnow().isoformat()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO user_sessions (session_token, user_id, created_at, last_seen_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(session_token) DO UPDATE SET
+            user_id=excluded.user_id,
+            last_seen_at=excluded.last_seen_at
+        """,
+        (session_token, user_id, now_iso, now_iso),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _sync_payment_history(payments: List[Dict]):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_iso = datetime.utcnow().isoformat()
+    for payment in payments or []:
+        payment_id = (
+            payment.get("paymentid")
+            or payment.get("paymentId")
+            or payment.get("id")
+        )
+        if not payment_id:
+            continue
+        cursor.execute(
+            """
+            INSERT INTO payment_history (
+                payment_id, invoice_no, client_no, booking_id, amount, method,
+                payment_date, raw_payload, created_at, deleted_at, deleted_by, delete_reason
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+            ON CONFLICT(payment_id) DO UPDATE SET
+                invoice_no=excluded.invoice_no,
+                client_no=excluded.client_no,
+                booking_id=excluded.booking_id,
+                amount=excluded.amount,
+                method=excluded.method,
+                payment_date=excluded.payment_date,
+                raw_payload=excluded.raw_payload
+            """,
+            (
+                payment_id,
+                payment.get("invoiceno") or payment.get("invoiceNo"),
+                payment.get("clientno") or payment.get("clientNo"),
+                payment.get("bookingid") or payment.get("bookingId"),
+                float(payment.get("amount") or 0),
+                payment.get("method"),
+                payment.get("date") or payment.get("payment_date"),
+                json.dumps(payment),
+                payment.get("created_at") or now_iso,
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+
+def _get_settings_dict() -> Dict[str, object]:
+    if SETTINGS_CACHE:
+        return SETTINGS_CACHE.copy()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT setting_key, setting_value FROM app_settings")
+    rows = cursor.fetchall()
+    conn.close()
+    SETTINGS_CACHE.update({row["setting_key"]: json.loads(row["setting_value"]) for row in rows})
+    return SETTINGS_CACHE.copy()
+
+
+_ensure_password_reset_table()
+_ensure_app_tables()
 
 def _hash_secret_word(secret_word: str) -> str:
     normalized = secret_word.strip().upper()
@@ -200,7 +454,15 @@ def _load_users() -> List[Dict]:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, email, password, role, agency_id FROM users")
+        cursor.execute(
+            """
+            SELECT id, name, email, password, role, agency_id,
+                   COALESCE(preferred_language, 'en') AS preferred_language,
+                   COALESCE(created_at, ?) AS created_at
+            FROM users
+            """,
+            (datetime.utcnow().isoformat(),),
+        )
         rows = cursor.fetchall()
         users = [dict(row) for row in rows]
         conn.close()
@@ -224,15 +486,26 @@ def _save_users(users: List[Dict]):
                 password = hashlib.sha256(password.encode()).hexdigest()
 
             cursor.execute("""
-                INSERT INTO users (id, name, email, password, role, agency_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO users (id, name, email, password, role, agency_id, preferred_language, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name=excluded.name,
                     email=excluded.email,
                     password=excluded.password,
                     role=excluded.role,
-                    agency_id=excluded.agency_id
-            """, (user.id, user.name, user.email, password, user.role, user.agency_id))
+                    agency_id=excluded.agency_id,
+                    preferred_language=excluded.preferred_language,
+                    created_at=COALESCE(users.created_at, excluded.created_at)
+            """, (
+                user.get("id"),
+                user.get("name"),
+                user.get("email"),
+                password,
+                user.get("role"),
+                user.get("agency_id"),
+                user.get("preferred_language", "en"),
+                user.get("created_at") or datetime.utcnow().isoformat(),
+            ))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -272,6 +545,201 @@ def get_users():
     except Exception as e:
         logger.error(f"Error fetching users: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sessions/register")
+def register_session(payload: SessionRegisterRequest, request: Request):
+    user_id = _get_current_user_id(request)
+    _register_session(payload.session_token, user_id)
+    return {"status": "success", "sessionToken": payload.session_token}
+
+
+@app.get("/api/notifications")
+def get_notifications(request: Request):
+    user_id = _get_current_user_id(request)
+    session_token = _get_current_session_token(request)
+    _register_session(session_token, user_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, user_id, message, session_id, is_global, category, is_read, created_at
+        FROM notifications
+        WHERE user_id = ?
+          AND (session_id = ? OR is_global = 1)
+        ORDER BY datetime(created_at) DESC
+        LIMIT 20
+        """,
+        (user_id, session_token),
+    )
+    items = [
+        {
+            "id": row["id"],
+            "userId": row["user_id"],
+            "message": row["message"],
+            "sessionId": row["session_id"],
+            "isGlobal": bool(row["is_global"]),
+            "category": row["category"],
+            "isRead": bool(row["is_read"]),
+            "createdAt": row["created_at"],
+        }
+        for row in cursor.fetchall()
+    ]
+    conn.close()
+    return {"notifications": items}
+
+
+@app.post("/api/notifications")
+def create_notification(payload: NotificationCreate, request: Request):
+    user_id = _get_current_user_id(request)
+    session_token = _get_current_session_token(request)
+    effective_session_id = None if payload.is_global else (payload.session_id or session_token)
+    _register_session(session_token, user_id)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    notification_id = f"notif-{int(time.time() * 1000)}"
+    created_at = datetime.utcnow().isoformat()
+    cursor.execute(
+        """
+        INSERT INTO notifications (id, user_id, session_id, message, category, is_global, is_read, created_at, read_at)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, NULL)
+        """,
+        (
+            notification_id,
+            user_id,
+            effective_session_id,
+            payload.message,
+            payload.category or "info",
+            1 if payload.is_global else 0,
+            created_at,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {
+        "id": notification_id,
+        "userId": user_id,
+        "message": payload.message,
+        "sessionId": effective_session_id,
+        "isGlobal": payload.is_global,
+        "category": payload.category or "info",
+        "isRead": False,
+        "createdAt": created_at,
+    }
+
+
+@app.patch("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: str, request: Request):
+    user_id = _get_current_user_id(request)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE notifications
+        SET is_read = 1, read_at = ?
+        WHERE id = ? AND user_id = ?
+        """,
+        (datetime.utcnow().isoformat(), notification_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.get("/api/settings")
+def get_settings():
+    return {"settings": _get_settings_dict()}
+
+
+@app.post("/api/settings")
+def save_settings(payload: SystemSettingsPayload, request: Request):
+    updated_by = request.headers.get("X-User-ID", "system")
+    settings_dict = payload.model_dump()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_iso = datetime.utcnow().isoformat()
+    for key, value in settings_dict.items():
+        cursor.execute(
+            """
+            INSERT INTO app_settings (setting_key, setting_value, updated_at, updated_by)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value=excluded.setting_value,
+                updated_at=excluded.updated_at,
+                updated_by=excluded.updated_by
+            """,
+            (key, json.dumps(value), now_iso, updated_by),
+        )
+    conn.commit()
+    conn.close()
+    _clear_settings_cache()
+    _log_system_event("INFO", "System settings updated and cache cleared", updated_by)
+    return {"status": "success", "settings": _get_settings_dict()}
+
+
+@app.post("/api/preferences/language")
+def update_language_preference(payload: UserPreferenceUpdate, request: Request):
+    user_id = _get_current_user_id(request)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET preferred_language = ? WHERE id = ?",
+        (payload.language, user_id),
+    )
+    conn.commit()
+    conn.close()
+    _log_system_event("INFO", f"Language updated to {payload.language}", user_id)
+    return {"status": "success", "language": payload.language}
+
+
+@app.get("/api/platform-overview")
+def get_platform_overview():
+    payments_total = 0.0
+    try:
+        payments_client = SecureBCClient(user_role="superadmin")
+        payments = payments_client.secure_get("payments")
+        _sync_payment_history(payments)
+        payments_total = sum(float(item.get("amount") or 0) for item in payments)
+    except Exception as exc:
+        logger.warning(f"Failed to fetch global payment totals: {exc}")
+
+    agencies = _load_agencies()
+    users = _load_users()
+    active_agencies = sum(
+        1 for agency in agencies if str(agency.get("subscription_status", "")).lower() == "active"
+    )
+
+    trends_map: Dict[str, int] = {}
+    for user in users:
+        created_value = user.get("created_at") or datetime.utcnow().isoformat()
+        month_key = str(created_value)[:7]
+        trends_map[month_key] = trends_map.get(month_key, 0) + 1
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT level, message, user_id, created_at
+        FROM system_logs
+        ORDER BY datetime(created_at) DESC
+        LIMIT 10
+        """
+    )
+    logs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return {
+        "totalRevenue": payments_total,
+        "activeAgencyCount": active_agencies,
+        "userRegistrationTrends": [
+            {"month": month, "count": trends_map[month]}
+            for month in sorted(trends_map.keys())
+        ],
+        "systemLogs": logs,
+        "activeHrUsers": sum(1 for user in users if user.get("role") == "hr"),
+    }
 
 class LoginRequest(BaseModel):
     email: str
@@ -378,7 +846,7 @@ def login(req: LoginRequest):
         
         if not user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
-            
+        _log_system_event("INFO", f"User login: {user['email']}", user.get("id"))
         return {"status": "success", "user": user}
     except HTTPException:
         raise
@@ -579,12 +1047,37 @@ def create_booking(booking: BookingCreate, client: SecureBCClient = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/bookings/{booking_id}")
+def delete_booking(booking_id: str, client: SecureBCClient = Depends(get_secure_bc_client)):
+    try:
+        client.secure_delete("bookings", booking_id)
+        return {"status": "success", "message": f"Booking {booking_id} deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting booking in BC: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- PAYMENTS ---
 
 @app.get("/api/payments")
 def get_payments(client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
         payments = client.secure_get("payments")
+        _sync_payment_history(payments)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT payment_id FROM payment_history WHERE deleted_at IS NOT NULL")
+        deleted_ids = {row["payment_id"] for row in cursor.fetchall()}
+        conn.close()
+        payments = [
+            payment
+            for payment in payments
+            if (
+                payment.get("paymentid")
+                or payment.get("paymentId")
+                or payment.get("id")
+            ) not in deleted_ids
+        ]
         return {"payments": payments}
     except Exception as e:
         logger.error(f"Error fetching payments: {e}")
@@ -598,6 +1091,7 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
         if not payload.get("paymentId"):
             payload["paymentId"] = f"PAY-{int(time.time())}"
         payment_result = client.secure_create("payments", payload)
+        _sync_payment_history([payment_result])
 
         automation_result = None
         invoice_no = payload.get("invoiceNo")
@@ -623,6 +1117,41 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/payments/{payment_id}")
+def delete_payment(
+    payment_id: str,
+    request: Request,
+    client: SecureBCClient = Depends(get_secure_bc_client),
+):
+    deleted_by = request.headers.get("X-User-ID", "unknown")
+    delete_time = datetime.utcnow().isoformat()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE payment_history
+        SET deleted_at = ?, deleted_by = ?, delete_reason = ?
+        WHERE payment_id = ?
+        """,
+        (delete_time, deleted_by, "manual_delete", payment_id),
+    )
+    history_updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    try:
+        client.secure_delete("payments", payment_id)
+    except Exception as exc:
+        if not history_updated:
+            logger.error(f"Error deleting payment {payment_id}: {exc}")
+            raise HTTPException(status_code=500, detail=str(exc))
+        logger.warning(f"BC delete failed for payment {payment_id}; local soft delete preserved: {exc}")
+
+    _log_system_event("INFO", f"Payment {payment_id} deleted", deleted_by)
+    return {"status": "success", "message": f"Payment {payment_id} deleted"}
+
+
 # --- EXPENSES ---
 
 @app.get("/api/expenses")
@@ -641,7 +1170,11 @@ def get_expenses(client: SecureBCClient = Depends(get_secure_bc_client)):
         else:
             local_expenses = [
                 e for e in all_local_expenses 
-                if e.get(client.AGENCY_CODE_FIELD.lower()) == client.agency_id or e.get(client.AGENCY_CODE_FIELD) == client.agency_id
+                if (
+                    e.get(client.AGENCY_CODE_FIELD.lower()) == client.agency_id 
+                    or e.get(client.AGENCY_CODE_FIELD) == client.agency_id
+                    or (not e.get(client.AGENCY_CODE_FIELD) and not e.get(client.AGENCY_CODE_FIELD.lower()))
+                )
             ]
         
         # Fetch manual expenses from BC (automatically filtered by SecureBCClient)
@@ -664,21 +1197,37 @@ def create_expense(expense: ExpenseCreate, client: SecureBCClient = Depends(get_
     """
     try:
         expense_id = f"EXP-{int(time.time())}"
-        expense_dict = expense.dict(by_alias=True)
+        
+        # Build expense dict manually to avoid Pydantic date issues
+        expense_dict = {}
+        
+        # Handle date - prioritize string date from frontend
+        if expense.date:
+            expense_dict["date"] = expense.date
+        elif expense.expense_date:
+            expense_dict["date"] = expense.expense_date.isoformat()
+        else:
+            expense_dict["date"] = date.today().isoformat()
+        
+        # Copy other fields
+        expense_dict["expenseType"] = expense.expense_type.value if hasattr(expense.expense_type, 'value') else str(expense.expense_type)
+        expense_dict["amount"] = expense.amount
+        expense_dict["description"] = expense.description
+        expense_dict["sourceInvoiceId"] = expense.source_invoice_id
+        expense_dict["recipientId"] = expense.recipient_id
         expense_dict["expenseId"] = expense_id
         expense_dict["status"] = "Pending"
         
         # DATA INJECTION: Automatically inject the agency_id into the payload
-        # This prevents orphaned records or cross-posting.
         if not client.is_super_admin:
             expense_dict[client.AGENCY_CODE_FIELD] = client.agency_id
         
-        # Save locally (with injected agency_id)
+        # Save locally
         expenses = _load_expenses()
         expenses.append(expense_dict)
         _save_expenses(expenses)
         
-        # Try to sync with BC (SecureBCClient will also inject/validate)
+        # Try to sync with BC
         try:
             bc_data = client.secure_create("expenses", expense_dict)
             # Update status if synchronized
@@ -693,7 +1242,7 @@ def create_expense(expense: ExpenseCreate, client: SecureBCClient = Depends(get_
             return expense_dict
             
     except Exception as e:
-        logger.error(f"Error creating expense: {e}")
+        logger.error(f"Error creating expense: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

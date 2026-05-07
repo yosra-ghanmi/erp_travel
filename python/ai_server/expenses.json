@@ -36,7 +36,7 @@
     "expenseType": "Provider Payout",
     "amount": 161.5,
     "date": "2026-04-24",
-    "description": "85% Payout for service H\u00f4tel La Kasbah (TS009)",
+    "description": "85% Payout for service H\u00c3\u00b4tel La Kasbah (TS009)",
     "status": "Pending"
   },
   {
@@ -46,7 +46,7 @@
     "expenseType": "Provider Payout",
     "amount": 161.5,
     "date": "2026-04-24",
-    "description": "85% Payout for service H\u00f4tel La Kasbah (TS009)",
+    "description": "85% Payout for service H\u00c3\u00b4tel La Kasbah (TS009)",
     "status": "Pending"
   },
   {
@@ -98,5 +98,27 @@
     "date": "2026-04-24",
     "description": "5% Agent Commission for Invoice INV-1776876547",
     "status": "Pending"
+  },
+  {
+    "date": "2026-01-15",
+    "expenseType": "Refund",
+    "amount": 400.0,
+    "description": "refund for client saifeddine sassi for cancelled booking",
+    "sourceInvoiceId": null,
+    "recipientId": null,
+    "expenseId": "EXP-1777994574",
+    "status": "Synchronized",
+    "Agency_Code": "AG-001"
+  },
+  {
+    "date": "2026-01-15",
+    "expenseType": "Hotel",
+    "amount": 500.0,
+    "description": "",
+    "sourceInvoiceId": null,
+    "recipientId": null,
+    "expenseId": "EXP-1778180054",
+    "status": "Synchronized",
+    "Agency_Code": "AG-001"
   }
 ]

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Trash2, X, Edit2 } from "lucide-react";
 import {
-  generateItinerary,
   syncOffers,
   createTravelOffer,
   deleteTravelOffer,
@@ -12,8 +11,6 @@ export function TravelOffersPage({ role, searchQuery }) {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeId, setActiveId] = useState(null);
-  const [plan, setPlan] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingOffer, setEditingOffer] = useState(null);
   const [newOffer, setNewOffer] = useState({
@@ -127,19 +124,6 @@ export function TravelOffersPage({ role, searchQuery }) {
     }
   };
 
-  const handleGenerate = async (offerId) => {
-    try {
-      setActiveId(offerId);
-      setError("");
-      const response = await generateItinerary(offerId);
-      setPlan(response);
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to generate itinerary.");
-    } finally {
-      setActiveId(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -148,8 +132,7 @@ export function TravelOffersPage({ role, searchQuery }) {
             Travel Offers
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Sync offers from Business Central and generate premium AI
-            itineraries.
+            Sync offers from Business Central.
           </p>
         </div>
         {isSuperAdmin && (
@@ -420,20 +403,6 @@ export function TravelOffersPage({ role, searchQuery }) {
                       : "Pricing on request"}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleGenerate(offer.id)}
-                  className="mt-4 w-full inline-flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white hover:bg-indigo-600 hover:text-white transition-colors"
-                  disabled={activeId === offer.id}
-                >
-                  {activeId === offer.id ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Generating...
-                    </span>
-                  ) : (
-                    "Generate AI Itinerary"
-                  )}
-                </button>
               </div>
             ))}
           </div>
@@ -455,34 +424,6 @@ export function TravelOffersPage({ role, searchQuery }) {
           </div>
         )}
       </div>
-
-      {plan ? (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-4 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-            {plan.plan?.title || "Premium Itinerary"}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {plan.plan?.summary}
-          </p>
-          <div className="mt-4 space-y-3">
-            {plan.plan?.days?.map((day) => (
-              <div
-                key={day.day}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2"
-              >
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                  Day {day.day}: {day.title}
-                </p>
-                <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
-                  {day.activities?.map((activity, index) => (
-                    <li key={index}>{activity}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

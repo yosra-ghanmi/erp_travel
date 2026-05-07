@@ -1,10 +1,22 @@
 import { useState, useEffect } from "react";
 import { users as seedUsers } from "../data/mockData";
 import { AuthContext, permissionsMap } from "./authCore";
-import { fetchUsers, loginUser } from "../services/erpApi";
+import { fetchUsers, loginUser, registerSession } from "../services/erpApi";
+
+function ensureSessionToken() {
+  let token = sessionStorage.getItem("erp_session_token");
+  if (!token) {
+    token =
+      globalThis.crypto?.randomUUID?.() ??
+      `sess-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem("erp_session_token", token);
+  }
+  return token;
+}
 
 export function AuthProvider({ children }) {
   const [users, setUsers] = useState(seedUsers);
+  const [sessionToken] = useState(() => ensureSessionToken());
 
   const [sessionUser, setSessionUser] = useState(() => {
     const saved = localStorage.getItem("erp_session");
@@ -20,10 +32,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (sessionUser) {
       localStorage.setItem("erp_session", JSON.stringify(sessionUser));
+      registerSession(sessionToken).catch((err) =>
+        console.error("Failed to register session:", err)
+      );
     } else {
       localStorage.removeItem("erp_session");
     }
-  }, [sessionUser]);
+  }, [sessionToken, sessionUser]);
 
   const login = async ({ email, password }) => {
     try {
@@ -76,6 +91,7 @@ export function AuthProvider({ children }) {
     users,
     setUsers,
     sessionUser,
+    sessionToken,
     role: sessionUser?.role ?? null,
     agencyId: sessionUser?.agency_id ?? null,
     isAuthenticated: Boolean(sessionUser),

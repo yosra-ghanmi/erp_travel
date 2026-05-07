@@ -21,16 +21,30 @@ export function ExpensesPage({ searchQuery }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const normalizeExpense = (exp, index) => ({
+    ...exp,
+    id: exp.expenseId || exp.expenseid || exp.id || `temp-expense-${index}`,
+    type: exp.expenseType || exp.expensetype || exp.type || "Other",
+    amount: exp.amount,
+    date: exp.date || exp.expenseDate || exp.expensedate,
+    description: exp.description,
+  });
+
+  const normalizedExpenses = useMemo(
+    () => expenses.map((exp, index) => normalizeExpense(exp, index)),
+    [expenses]
+  );
+
   const filteredExpenses = useMemo(() => {
-    if (!searchQuery) return expenses;
+    if (!searchQuery) return normalizedExpenses;
     const q = searchQuery.toLowerCase();
-    return expenses.filter((exp) => {
-      const type = String(exp.expensetype || exp.type || "").toLowerCase();
+    return normalizedExpenses.filter((exp) => {
+      const type = String(exp.type || "").toLowerCase();
       const desc = String(exp.description || "").toLowerCase();
-      const id = String(exp.expenseid || "").toLowerCase();
+      const id = String(exp.id || "").toLowerCase();
       return type.includes(q) || desc.includes(q) || id.includes(q);
     });
-  }, [expenses, searchQuery]);
+  }, [normalizedExpenses, searchQuery]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -44,12 +58,28 @@ export function ExpensesPage({ searchQuery }) {
     loadData();
   }, []);
 
+  const typeToExpenseType = {
+    Hotel: "Hotel",
+    Transport: "Transport",
+    Flights: "Flights",
+    Marketing: "Marketing",
+    Staff: "Staff",
+    Refund: "Refund",
+    Other: "Other",
+  };
+
   const saveExpense = async () => {
     if (!form.amount || !form.type) return;
     setLoading(true);
     setError("");
     try {
-      const result = await createExpense(form);
+      const payload = {
+        expenseType: typeToExpenseType[form.type],
+        amount: Number(form.amount),
+        date: form.date,
+        description: form.description,
+      };
+      const result = await createExpense(payload);
       setExpenses((prev) => [...prev, result]);
       setForm(initialForm);
     } catch (err) {
@@ -108,22 +138,34 @@ export function ExpensesPage({ searchQuery }) {
             headers={["ID", "Type", "Description", "Amount", "Date"]}
             rows={filteredExpenses.map((exp) => (
               <tr
-                key={exp.expenseid}
+                key={exp.id}
                 className="border-b border-slate-100 dark:border-slate-800"
               >
                 <td className="px-2 py-3 text-xs font-mono text-slate-600 dark:text-slate-400">
-                  {exp.expenseid}
+                  {exp.id || "N/A"}
                 </td>
                 <td className="px-2 py-3">
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                    {exp.expensetype || exp.type}
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
+                      exp.type === "Refund"
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    }`}
+                  >
+                    {exp.type}
                   </span>
                 </td>
                 <td className="px-2 py-3 text-sm text-slate-700 dark:text-slate-300">
                   {exp.description}
                 </td>
-                <td className="px-2 py-3 font-bold text-rose-600">
-                  -${exp.amount}
+                <td
+                  className={`px-2 py-3 font-bold ${
+                    exp.type === "Refund" ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {exp.type === "Refund"
+                    ? `+$${exp.amount}`
+                    : `-$${exp.amount}`}
                 </td>
                 <td className="px-2 py-3 text-xs text-slate-500 dark:text-slate-400">
                   {exp.date}
@@ -146,6 +188,7 @@ export function ExpensesPage({ searchQuery }) {
             <option value="Flights">Flights</option>
             <option value="Marketing">Marketing</option>
             <option value="Staff">Staff</option>
+            <option value="Refund">Refund</option>
             <option value="Other">Other</option>
           </Select>
           <Input

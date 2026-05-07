@@ -1,0 +1,7 @@
+User-agent: Googlebot
+Disallow: /nogooglebot/
+
+User-agent: *
+Allow: /
+
+Sitemap: https://fresh-dimpled-wren-0vz607.teleporthq.app/sitemap.xml

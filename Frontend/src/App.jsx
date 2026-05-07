@@ -3,6 +3,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router-dom";
@@ -51,6 +52,13 @@ import {
   fetchStaff,
   fetchSalaryGrades,
   fetchContracts,
+  fetchNotifications,
+  createNotification,
+  markNotificationRead,
+  fetchSettings,
+  saveSettings,
+  updateLanguagePreference,
+  fetchPlatformOverview,
 } from "./services/erpApi";
 
 const normalizeClient = (client) => ({
@@ -222,6 +230,7 @@ function AppWorkspace() {
     users,
     setUsers,
     sessionUser,
+    sessionToken,
     role,
     agencyId,
     logout,
@@ -229,9 +238,11 @@ function AppWorkspace() {
     hasPermission,
   } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { moduleKey } = useParams();
   const [language, setLanguage] = useState(
-    () => localStorage.getItem("lang") ?? "en"
+    () =>
+      localStorage.getItem("lang") ?? sessionUser?.preferred_language ?? "en"
   );
   const [darkMode, setDarkMode] = useState(false);
   const [clients, setClients] = useState([]);
@@ -247,6 +258,13 @@ function AppWorkspace() {
   const [contracts, setContracts] = useState([]);
   const [tenantAgencies, setTenantAgencies] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [platformOverview, setPlatformOverview] = useState({
+    totalRevenue: 0,
+    activeAgencyCount: 0,
+    userRegistrationTrends: [],
+    systemLogs: [],
+    activeHrUsers: 0,
+  });
 
   useEffect(() => {
     fetchAgencies()
@@ -266,136 +284,7 @@ function AppWorkspace() {
     strictTenantIsolation: true,
   });
 
-  const [notifications, setNotifications] = useState(() => {
-    const defaultNotifs = [
-      {
-        id: "notif-1",
-        message: "New inquiry from website",
-        read: false,
-      },
-      {
-        id: "notif-2",
-        message: "Pending payment for BK-9002",
-        read: false,
-      },
-      {
-        id: "notif-3",
-        message: "Trip seats low for Japan Golden Route",
-        read: false,
-      },
-    ];
-    if (sessionUser?.id) {
-      const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Migrate old string format to new object format if needed
-        return parsed.map((n, idx) =>
-          typeof n === "string"
-            ? { id: `migrated-${idx}`, message: n, read: false }
-            : n
-        );
-      }
-      return defaultNotifs;
-    }
-    return [];
-  });
-
-  useEffect(() => {
-    const defaultNotifs = [
-      {
-        id: "notif-1",
-        message: "New inquiry from website",
-        read: false,
-      },
-      {
-        id: "notif-2",
-        message: "Pending payment for BK-9002",
-        read: false,
-      },
-      {
-        id: "notif-3",
-        message: "Trip seats low for Japan Golden Route",
-        read: false,
-      },
-    ];
-    if (sessionUser?.id) {
-      const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setNotifications(
-          parsed.map((n, idx) =>
-            typeof n === "string"
-              ? { id: `migrated-${idx}`, message: n, read: false }
-              : n
-          )
-        );
-      } else {
-        setNotifications(defaultNotifs);
-      }
-    } else {
-      setNotifications([]);
-    }
-  }, [sessionUser?.id]);
-
-  useEffect(() => {
-    if (!sessionUser?.id) return;
-
-    const handleStorageChange = (e) => {
-      if (e.key === `erp_notifications_${sessionUser.id}`) {
-        const updated = JSON.parse(e.newValue || "[]");
-        setNotifications(updated);
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [sessionUser?.id]);
-
-  useEffect(() => {
-    if (sessionUser?.id) {
-      const saved = localStorage.getItem(`erp_notifications_${sessionUser.id}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setNotifications(
-            parsed.map((n, idx) =>
-              typeof n === "string"
-                ? { id: `migrated-${idx}`, message: n, read: false }
-                : n
-            )
-          );
-        } catch (e) {
-          console.error("Failed to parse notifications", e);
-        }
-      } else {
-        // Fallback to default notifications if none saved
-        setNotifications([
-          { id: "notif-1", message: "New inquiry from website", read: false },
-          {
-            id: "notif-2",
-            message: "Pending payment for BK-9002",
-            read: false,
-          },
-          {
-            id: "notif-3",
-            message: "Trip seats low for Japan Golden Route",
-            read: false,
-          },
-        ]);
-      }
-    } else {
-      setNotifications([]);
-    }
-  }, [sessionUser?.id]);
-
-  useEffect(() => {
-    if (sessionUser?.id) {
-      localStorage.setItem(
-        `erp_notifications_${sessionUser.id}`,
-        JSON.stringify(notifications)
-      );
-    }
-  }, [notifications, sessionUser?.id]);
+  const [notifications, setNotifications] = useState([]);
 
   const availableModules = useMemo(() => modulesByRole[role] ?? [], [role]);
   const resolvedModuleKey = availableModules.some(
@@ -414,10 +303,62 @@ function AppWorkspace() {
   }, [activeModuleLabel]);
 
   useEffect(() => {
+    if (
+      sessionUser?.preferred_language &&
+      sessionUser.preferred_language !== language
+    ) {
+      setLanguage(sessionUser.preferred_language);
+      return;
+    }
     localStorage.setItem("lang", language);
     document.documentElement.setAttribute("dir", getDir(language));
     document.documentElement.setAttribute("lang", language);
-  }, [language]);
+  }, [language, location.pathname, sessionUser?.preferred_language]);
+
+  useEffect(() => {
+    if (!sessionUser?.id) {
+      setNotifications([]);
+      return;
+    }
+
+    fetchNotifications()
+      .then((rows) =>
+        setNotifications(
+          rows.map((item) => ({
+            ...item,
+            read: item.isRead ?? item.read ?? false,
+          }))
+        )
+      )
+      .catch((err) => console.error("Failed to fetch notifications:", err));
+  }, [sessionToken, sessionUser?.id]);
+
+  useEffect(() => {
+    fetchSettings()
+      .then(setSettings)
+      .catch((err) => console.error("Failed to fetch settings:", err));
+  }, []);
+
+  useEffect(() => {
+    if (role !== "superadmin") return;
+    fetchPlatformOverview()
+      .then(setPlatformOverview)
+      .catch((err) =>
+        console.error("Failed to fetch platform overview metrics:", err)
+      );
+  }, [role, users.length, tenantAgencies.length]);
+
+  const handleLanguageChange = async (nextLanguage) => {
+    setLanguage(nextLanguage);
+    localStorage.setItem("lang", nextLanguage);
+    if (sessionUser?.id) {
+      try {
+        await updateLanguagePreference(nextLanguage);
+      } catch (err) {
+        console.error("Failed to persist language preference:", err);
+      }
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -520,7 +461,6 @@ function AppWorkspace() {
         setStaff(nextStaff);
         setSalaryGrades(nextSalaryGrades);
         setContracts(nextContracts);
-        setNotifications(buildNotifications(nextBookings, nextPayments));
       } catch (error) {
         if (!cancelled) {
           console.error(
@@ -539,19 +479,37 @@ function AppWorkspace() {
     };
   }, []);
 
-  const pushNotification = (text) =>
-    setNotifications((prev) =>
-      [
-        {
-          id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          message: text,
-          read: false,
-        },
-        ...prev,
-      ].slice(0, 8)
-    );
+  const pushNotification = async (text, options = {}) => {
+    try {
+      const created = await createNotification({
+        message: text,
+        isGlobal: options.isGlobal ?? false,
+        category: options.category ?? "info",
+      });
+      setNotifications((prev) =>
+        [{ ...created, read: false }, ...prev].slice(0, 8)
+      );
+    } catch (err) {
+      console.error("Failed to create notification:", err);
+      setNotifications((prev) =>
+        [
+          {
+            id: `notif-${Date.now()}`,
+            message: text,
+            read: false,
+          },
+          ...prev,
+        ].slice(0, 8)
+      );
+    }
+  };
 
-  const markNotificationAsRead = (id) => {
+  const markNotificationAsRead = async (id) => {
+    try {
+      await markNotificationRead(id);
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
+    }
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
@@ -582,42 +540,6 @@ function AppWorkspace() {
     () => buildActivityFeed(scopedBookings, scopedPayments),
     [scopedBookings, scopedPayments]
   );
-
-  const saveAiAsTrip = (itinerary, form) => {
-    if (!agencyId) return;
-    const newTrip = {
-      id: `TR-${400 + trips.length + 1}`,
-      agency_id: agencyId,
-      title: `${form.destination} AI Plan`,
-      destination: form.destination,
-      duration: Number(form.dates),
-      price: Number(form.budget),
-      services: itinerary.attractions.join(", "),
-      seatsLeft: 8,
-    };
-    setTrips((prev) => [...prev, newTrip]);
-    pushNotification(`AI itinerary saved as trip package ${newTrip.id}`);
-  };
-
-  const convertAiToBooking = (_itinerary, form, clientId) => {
-    if (!agencyId) return;
-    const newBooking = {
-      id: `BK-${9000 + bookings.length + 1}`,
-      agency_id: agencyId,
-      clientId: clientId ?? scopedClients[0]?.id ?? "",
-      tripId: "",
-      destination: form.destination,
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date(Date.now() + Number(form.dates) * 86400000)
-        .toISOString()
-        .slice(0, 10),
-      status: "pending",
-      paymentStatus: "unpaid",
-      amount: Number(form.budget),
-    };
-    setBookings((prev) => [...prev, newBooking]);
-    pushNotification(`AI itinerary converted to booking ${newBooking.id}`);
-  };
 
   const toggleAgencySubscription = async (agencyIdValue) => {
     let agencyNameValue = agencyIdValue;
@@ -732,11 +654,8 @@ function AppWorkspace() {
     if (resolvedModuleKey === "platform_overview")
       return (
         <PlatformOverviewPage
+          overview={platformOverview}
           agencies={tenantAgencies}
-          users={users}
-          bookings={bookings}
-          payments={payments}
-          aiLogs={aiUsageLogs}
         />
       );
     if (resolvedModuleKey === "manage_agencies")
@@ -763,7 +682,18 @@ function AppWorkspace() {
       );
     if (resolvedModuleKey === "system_settings")
       return (
-        <SystemSettingsPage settings={settings} setSettings={setSettings} />
+        <SystemSettingsPage
+          settings={settings}
+          setSettings={setSettings}
+          onSave={async (nextSettings) => {
+            const saved = await saveSettings(nextSettings);
+            setSettings(saved);
+            if (role === "superadmin") {
+              const overview = await fetchPlatformOverview();
+              setPlatformOverview(overview);
+            }
+          }}
+        />
       );
     if (resolvedModuleKey === "hr_dashboard") {
       return (
@@ -861,6 +791,7 @@ function AppWorkspace() {
           agencyId={agencyId}
           reservations={scopedServiceUsage}
           bookings={scopedBookings}
+          setBookings={setBookings}
           clients={scopedClients}
           services={scopedServices}
           searchQuery={searchQuery}
@@ -890,13 +821,7 @@ function AppWorkspace() {
       return <ExpensesPage searchQuery={searchQuery} />;
     }
     if (resolvedModuleKey === "ai") {
-      return (
-        <AIPlannerPage
-          onSaveAsTrip={saveAiAsTrip}
-          onConvertToBooking={convertAiToBooking}
-          clients={scopedClients}
-        />
-      );
+      return <AIPlannerPage clients={scopedClients} />;
     }
     if (resolvedModuleKey === "travel_offers") {
       return <TravelOffersPage role={role} searchQuery={searchQuery} />;
@@ -921,7 +846,7 @@ function AppWorkspace() {
       modules={availableModules}
       agencyName={agencyName}
       language={language}
-      onLanguageChange={setLanguage}
+      onLanguageChange={handleLanguageChange}
       darkMode={darkMode}
       onToggleDarkMode={() => setDarkMode((prev) => !prev)}
       notifications={notifications}
