@@ -17,16 +17,18 @@ STAFF_FILE = os.path.join(BASE_DIR, "staff.json")
 class PayrollService:
     # Role-Based Fixed Salaries (Tunisian Dinar - DT)
     SALARY_RATES = {
-        "Admin": 2000,
-        "Finance": 1800,
-        "Agent": 1500
+        "Admin": 2500,
+        "Finance": 1500,
+        "Agent": 950,
+        "HR": 1500,
     }
     
     # Mapping roles to G/L Accounts in Business Central (Example accounts)
     GL_ACCOUNTS = {
         "Admin": "60100",
         "Finance": "60110",
-        "Agent": "60120"
+        "Agent": "60120",
+        "HR": "60130",
     }
 
     @staticmethod
@@ -126,7 +128,7 @@ class PayrollService:
         
         for staff in staff_members:
             # Determine salary rate
-            amount = cls.SALARY_RATES.get(staff.role, 1500)
+            amount = cls.SALARY_RATES.get(staff.role, cls.SALARY_RATES["Agent"])
             
             # Create Salary record
             salary = SalaryExpense(
@@ -157,7 +159,7 @@ class PayrollService:
                 # Map to General Journal Line
                 journal_line = {
                     "accountType": "G/L Account",
-                    "accountNo": cls.GL_ACCOUNTS.get(staff.role, "60120"), # G/L account for Salaries
+                    "accountNo": cls.GL_ACCOUNTS.get(staff.role, cls.GL_ACCOUNTS["Agent"]), # G/L account for Salaries
                     "amount": amount, # Positive for Debit (Expense)
                     "description": f"Monthly Salary - {staff.role} - {month_year}",
                     "postingDate": today.isoformat(),

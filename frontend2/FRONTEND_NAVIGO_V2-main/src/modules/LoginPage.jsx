@@ -114,7 +114,7 @@ export function LoginPage() {
         <div className="relative hidden w-[45%] flex-col justify-between overflow-hidden p-12 lg:flex">
           <div className="absolute inset-0">
             <img src={p1} alt="Travel" className="h-full w-full object-cover opacity-50 transition-transform duration-10000 hover:scale-110" />
-            <div className="absolute inset-0 bg-gradient-to-br from-brand-600/60 via-brand-900/80 to-slate-950" />
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-500/40 via-brand-800/60 to-slate-900/30" />
           </div>
 
           <div className="relative z-10">

@@ -19,13 +19,13 @@ import {
   YAxis,
 } from "recharts";
 import { Card, Panel, Button, Modal, Input } from "../components/ui";
+import { calculateMonthlyPayroll } from "../data/payroll";
 
 export function HRDashboardPage({
   users,
-  staff = [],
-  salaryGrades = [],
   contracts = [],
   searchQuery,
+  onNavigate,
 }) {
   const [isHiringModalOpen, setIsHiringModalOpen] = useState(false);
   const [hiringForm, setHiringForm] = useState({
@@ -34,32 +34,24 @@ export function HRDashboardPage({
     priority: "Medium",
   });
 
+  const workforce = useMemo(
+    () => users.filter((user) => user.role !== "superadmin"),
+    [users]
+  );
+
   const totalEmployees = useMemo(() => {
-    return staff.length || users.filter((u) => u.role !== "superadmin").length;
-  }, [staff, users]);
+    return workforce.length;
+  }, [workforce]);
 
   const activeContracts = useMemo(() => {
     return contracts.filter((c) => c.status === "active").length;
   }, [contracts]);
 
   const totalPayroll = useMemo(() => {
-    return salaryGrades.reduce(
-      (acc, grade) => acc + (grade.baseSalary || 0),
-      0
-    );
-  }, [salaryGrades]);
+    return calculateMonthlyPayroll(workforce);
+  }, [workforce]);
 
-  // Use staff if available, else fallback to users
   const departmentDistribution = useMemo(() => {
-    if (staff.length > 0) {
-      const depts = {};
-      staff.forEach((s) => {
-        const dept = s.jobTitle || "Other";
-        depts[dept] = (depts[dept] || 0) + 1;
-      });
-      return Object.entries(depts).map(([name, count]) => ({ name, count }));
-    }
-
     return [
       { name: "Sales", count: users.filter((u) => u.role === "agent").length },
       { name: "Admin", count: users.filter((u) => u.role === "admin").length },
@@ -69,7 +61,7 @@ export function HRDashboardPage({
       },
       { name: "HR", count: users.filter((u) => u.role === "hr").length },
     ];
-  }, [staff, users]);
+  }, [users]);
 
   const handleHiringSubmit = () => {
     if (!hiringForm.title) return;
@@ -87,9 +79,21 @@ export function HRDashboardPage({
           HR Overview
         </h2>
         <div className="flex gap-2">
-          <Button variant="ghost" className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2"
+            onClick={() => onNavigate?.("payroll_calendar")}
+          >
             <Calendar className="h-4 w-4" />
             Payroll Calendar
+          </Button>
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2"
+            onClick={() => onNavigate?.("contracts")}
+          >
+            <FileText className="h-4 w-4" />
+            Manage Contracts
           </Button>
           <Button
             onClick={() => setIsHiringModalOpen(true)}
@@ -110,8 +114,8 @@ export function HRDashboardPage({
         />
         <Card
           title="Monthly Payroll"
-          value={`$${totalPayroll.toLocaleString()}`}
-          hint="Estimated base salaries"
+          value={`${totalPayroll.toLocaleString()} DT`}
+          hint="Fixed monthly payroll by role"
           icon={Banknote}
         />
         <Card

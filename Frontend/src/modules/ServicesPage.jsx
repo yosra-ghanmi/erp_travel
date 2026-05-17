@@ -154,7 +154,7 @@ export function ServicesPage({
           name: form.name,
           serviceType: form.category,
           price: Number(form.price),
-          currencyCode: "USD",
+          currencyCode: "TND",
           location: form.location,
           description: form.description,
         };

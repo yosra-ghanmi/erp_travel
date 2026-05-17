@@ -1,88 +1,79 @@
-import { useState } from "react";
-import { Plus, Trash2, Edit2, DollarSign } from "lucide-react";
-import { Button, DataTable, Input, Panel, Modal } from "../components/ui";
-import {
-  createSalaryGrade,
-  updateSalaryGrade,
-  deleteSalaryGrade,
-} from "../services/erpApi";
+import { useMemo, useState } from "react";
+import { Edit2, PlusCircle } from "lucide-react";
+import { Button, DataTable, Input, Modal, Panel } from "../components/ui";
+import { PAYROLL_ROLE_DEFINITIONS } from "../data/payroll";
 
-export function SalaryGradesPage({
-  salaryGrades = [],
-  setSalaryGrades,
-  searchQuery,
-}) {
+export function SalaryGradesPage({ searchQuery }) {
+  const [grades, setGrades] = useState(PAYROLL_ROLE_DEFINITIONS);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrade, setEditingGrade] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
-    name: "",
-    baseSalary: "",
-    bonus: "",
-    taxRate: "",
+    code: "",
+    role: "",
+    description: "",
+    amount: "",
+    currency: "DT",
   });
 
-  const filteredGrades = salaryGrades.filter(
-    (g) =>
-      !searchQuery || g.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredGrades = useMemo(
+    () =>
+      grades.filter((grade) => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          grade.code.toLowerCase().includes(q) ||
+          grade.role.toLowerCase().includes(q) ||
+          grade.description.toLowerCase().includes(q)
+        );
+      }),
+    [grades, searchQuery]
   );
 
   const handleOpenModal = (grade = null) => {
     if (grade) {
       setEditingGrade(grade);
       setForm({
-        name: grade.name,
-        baseSalary: grade.baseSalary,
-        bonus: grade.bonus,
-        taxRate: grade.taxRate,
+        code: grade.code,
+        role: grade.role,
+        description: grade.description,
+        amount: String(grade.amount),
+        currency: grade.currency,
       });
     } else {
       setEditingGrade(null);
-      setForm({ name: "", baseSalary: "", bonus: "", taxRate: "" });
+      setForm({
+        code: "",
+        role: "",
+        description: "",
+        amount: "",
+        currency: "DT",
+      });
     }
     setIsModalOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name || !form.baseSalary) return;
-    setIsLoading(true);
+  const handleSave = () => {
+    if (!form.code || !form.role || !form.description || !form.amount) return;
 
-    try {
-      const payload = {
-        ...form,
-        baseSalary: Number(form.baseSalary),
-        bonus: Number(form.bonus),
-        taxRate: Number(form.taxRate),
-      };
+    const nextGrade = {
+      code: form.code.trim().toUpperCase(),
+      role: form.role.trim().toLowerCase(),
+      description: form.description.trim(),
+      amount: Number(form.amount),
+      currency: form.currency.trim().toUpperCase() || "DT",
+    };
 
-      if (editingGrade) {
-        await updateSalaryGrade(editingGrade.id, payload);
-        setSalaryGrades((prev) =>
-          prev.map((g) => (g.id === editingGrade.id ? { ...g, ...payload } : g))
-        );
-      } else {
-        const result = await createSalaryGrade(payload);
-        setSalaryGrades((prev) => [...prev, result]);
-      }
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error("Failed to save salary grade:", error);
-      alert("Failed to save salary grade. Please try again.");
-    } finally {
-      setIsLoading(false);
+    if (editingGrade) {
+      setGrades((prev) =>
+        prev.map((grade) =>
+          grade.code === editingGrade.code ? nextGrade : grade
+        )
+      );
+    } else {
+      setGrades((prev) => [...prev, nextGrade]);
     }
-  };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this salary grade?")) {
-      try {
-        await deleteSalaryGrade(id);
-        setSalaryGrades((prev) => prev.filter((g) => g.id !== id));
-      } catch (error) {
-        console.error("Failed to delete salary grade:", error);
-        alert("Failed to delete salary grade.");
-      }
-    }
+    setIsModalOpen(false);
   };
 
   return (
@@ -95,52 +86,43 @@ export function SalaryGradesPage({
           onClick={() => handleOpenModal()}
           className="flex items-center gap-2"
         >
-          <Plus className="h-4 w-4" />
-          Add Grade
+          <PlusCircle className="h-4 w-4" />
+          Add Payroll
         </Button>
       </div>
 
-      <Panel title="Salary Grade Definitions">
+      <Panel title="Monthly Payroll">
         <DataTable
           headers={[
-            "Grade Name",
-            "Base Salary",
-            "Bonus",
-            "Tax Rate",
-            "Total",
+            "Code",
+            "Role",
+            "Description",
+            "Monthly Payroll",
             "Actions",
           ]}
           rows={filteredGrades.map((grade) => (
             <tr
-              key={grade.id}
+              key={grade.code}
               className="border-b border-slate-100 dark:border-slate-800"
             >
-              <td className="px-2 py-3 font-medium">{grade.name}</td>
+              <td className="px-2 py-3 font-medium">{grade.code}</td>
+              <td className="px-2 py-3 capitalize">{grade.role}</td>
+              <td className="px-2 py-3">{grade.description}</td>
               <td className="px-2 py-3">
-                ${grade.baseSalary.toLocaleString()}
-              </td>
-              <td className="px-2 py-3">${grade.bonus.toLocaleString()}</td>
-              <td className="px-2 py-3">{grade.taxRate}%</td>
-              <td className="px-2 py-3 font-bold text-cyan-600 dark:text-cyan-400">
-                ${(grade.baseSalary + grade.bonus).toLocaleString()}
+                <span className="font-bold text-cyan-600 dark:text-cyan-400">
+                  {grade.amount.toLocaleString()} {grade.currency}
+                </span>
               </td>
               <td className="px-2 py-3">
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenModal(grade)}
-                  >
-                    <Edit2 className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleDelete(grade.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  onClick={() => handleOpenModal(grade)}
+                >
+                  <Edit2 className="h-3 w-3" />
+                  Edit
+                </Button>
               </td>
             </tr>
           ))}
@@ -150,68 +132,81 @@ export function SalaryGradesPage({
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingGrade ? "Edit Salary Grade" : "Add New Salary Grade"}
+        title={editingGrade ? "Edit Payroll Grade" : "Add Payroll Grade"}
       >
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Code
+              </label>
+              <Input
+                value={form.code}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, code: e.target.value }))
+                }
+                placeholder="e.g. SALES"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Role
+              </label>
+              <Input
+                value={form.role}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, role: e.target.value }))
+                }
+                placeholder="e.g. agent"
+              />
+            </div>
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Grade Name
+              Description
             </label>
             <Input
-              placeholder="e.g. Senior Agent"
-              value={form.name}
+              value={form.description}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, name: e.target.value }))
+                setForm((prev) => ({ ...prev, description: e.target.value }))
               }
+              placeholder="Monthly payroll description"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Base Salary
+                Amount
               </label>
               <Input
                 type="number"
-                placeholder="4500"
-                value={form.baseSalary}
+                min="0"
+                value={form.amount}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, baseSalary: e.target.value }))
+                  setForm((prev) => ({ ...prev, amount: e.target.value }))
                 }
+                placeholder="0"
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Bonus
+                Currency
               </label>
               <Input
-                type="number"
-                placeholder="500"
-                value={form.bonus}
+                value={form.currency}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, bonus: e.target.value }))
+                  setForm((prev) => ({ ...prev, currency: e.target.value }))
                 }
+                placeholder="DT"
               />
             </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Tax Rate %
-            </label>
-            <Input
-              type="number"
-              placeholder="20"
-              value={form.taxRate}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, taxRate: e.target.value }))
-              }
-            />
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSave}>
-              {editingGrade ? "Update Grade" : "Create Grade"}
+              {editingGrade ? "Update Payroll" : "Add Payroll"}
             </Button>
           </div>
         </div>

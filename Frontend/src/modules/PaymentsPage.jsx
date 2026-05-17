@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import logo from "../assets/logo.png";
 import {
   Button,
   DataTable,
@@ -27,6 +28,15 @@ const initialForm = {
   // Environment Note: Business Central license restricts dates to specific months (Nov, Dec, Jan, Feb)
   date: "2026-01-15",
 };
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = (error) => reject(error);
+    img.src = src;
+  });
 
 export function PaymentsPage({ searchQuery }) {
   const [payments, setPayments] = useState([]);
@@ -118,25 +128,32 @@ export function PaymentsPage({ searchQuery }) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const client = clients.find((c) => (c.no || c.id) === invoice.clientNo);
 
+    try {
+      const logoImage = await loadImage(logo);
+      doc.addImage(logoImage, "PNG", 14, 14, 28, 28);
+    } catch (error) {
+      console.warn("Unable to load logo for PDF:", error);
+    }
+
     // Header
     doc.setFontSize(20);
     doc.setTextColor(40, 40, 40);
-    doc.text("TRAVEL INVOICE", pageWidth / 2, 20, { align: "center" });
+    doc.text("TRAVEL INVOICE", pageWidth / 2, 24, { align: "center" });
 
     // Agency Info
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text("Smart Travel Agency", 14, 30);
-    doc.text("123 Travel Avenue, Tourism City", 14, 35);
+    doc.text("Smart Travel Agency", 14, 44);
+    doc.text("123 Travel Avenue, Tourism City", 14, 49);
 
     // Invoice Details
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Invoice No: ${iNo}`, 14, 50);
-    doc.text(`Date: ${invoice.invoiceDate || "N/A"}`, 14, 57);
-    doc.text(`Due Date: ${invoice.dueDate || "N/A"}`, 14, 64);
+    doc.text(`Invoice No: ${iNo}`, 14, 64);
+    doc.text(`Date: ${invoice.invoiceDate || "N/A"}`, 14, 71);
+    doc.text(`Due Date: ${invoice.dueDate || "N/A"}`, 14, 78);
     if (invoice.quoteNo) {
-      doc.text(`Quote No: ${invoice.quoteNo}`, 14, 71);
+      doc.text(`Quote No: ${invoice.quoteNo}`, 14, 85);
     }
 
     // Client Info
@@ -145,11 +162,11 @@ export function PaymentsPage({ searchQuery }) {
         client?.name || invoice.clientName || invoice.clientNo || "N/A"
       }`,
       14,
-      82
+      96
     );
 
     // Items Table
-    const currency = invoice.currencyCode || "USD";
+    const currency = invoice.currencyCode || "TND";
     const tableRows =
       lines.length > 0
         ? lines.map((line) => [
@@ -172,7 +189,7 @@ export function PaymentsPage({ searchQuery }) {
           ];
 
     autoTable(doc, {
-      startY: 92,
+      startY: 106,
       head: [["Service", "Qty", "Unit Price", "Total"]],
       body: tableRows,
       theme: "striped",

@@ -1,83 +1,230 @@
-import { useState, useRef } from "react";
-import { Plus, Trash2, FileText, Upload, Download, Eye } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { Plus, Trash2, Edit2, FileText } from "lucide-react";
 import {
   Button,
+  Card,
   DataTable,
-  Input,
   Panel,
   StatusBadge,
   Modal,
   Select,
+  Input,
 } from "../components/ui";
-import { createContract, deleteContract } from "../services/erpApi";
+import {
+  createContract,
+  updateContract,
+  deleteContract,
+  fetchStaff,
+} from "../services/erpApi";
 
-export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
+const blankForm = {
+  employeeNo: "",
+  startDate: "",
+  endDate: "",
+  status: "Draft",
+};
+
+const normalizeContractRecord = (contract) => ({
+  ...contract,
+  id:
+    contract.contractNo ??
+    contract.contractno ??
+    contract.id ??
+    `CT-${Date.now()}`,
+  contractNo:
+    contract.contractNo ??
+    contract.contractno ??
+    contract.id ??
+    `CT-${Date.now()}`,
+  employeeNo:
+    contract.employeeNo ?? contract.employeeno ?? contract.staffId ?? "",
+  startDate: contract.startDate ?? contract.startdate ?? "",
+  endDate: contract.endDate ?? contract.enddate ?? contract.expiryDate ?? "",
+  expiryDate: contract.endDate ?? contract.enddate ?? contract.expiryDate ?? "",
+  status: String(contract.status ?? "draft").toLowerCase(),
+});
+
+const toContractStatusLabel = (status) => {
+  const normalized = String(status ?? "Draft").toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const LICENSE_ALLOWED_MONTHS = new Set([1, 2, 11, 12]);
+const LICENSE_MONTHS_MESSAGE =
+  "Business Central allows contract dates only in January, February, November, or December.";
+
+const isAllowedContractDate = (dateValue) => {
+  if (!dateValue) return true;
+  const month = new Date(dateValue).getMonth() + 1;
+  return LICENSE_ALLOWED_MONTHS.has(month);
+};
+
+const getContractValidationMessage = (form) => {
+  if (!form.employeeNo || !form.startDate) {
+    return "Employee and start date are required.";
+  }
+  if (form.endDate && form.endDate < form.startDate) {
+    return "Expiry date must be on or after the start date.";
+  }
+  if (
+    !isAllowedContractDate(form.startDate) ||
+    !isAllowedContractDate(form.endDate)
+  ) {
+    return LICENSE_MONTHS_MESSAGE;
+  }
+  return "";
+};
+
+const getErrorMessage = (error, fallbackMessage) =>
+  error?.response?.data?.detail || error?.message || fallbackMessage;
+
+const normalizeStaffMember = (member) => {
+  const employeeNo = member.no ?? member.employeeNo ?? member.id ?? "";
+  const firstName = member.firstname ?? member.firstName ?? "";
+  const lastName = member.lastname ?? member.lastName ?? "";
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  return {
+    id: employeeNo,
+    label: fullName || member.fullname || member.fullName || employeeNo,
+  };
+};
+
+const normalizeUserMember = (member) => ({
+  id: member.id ?? "",
+  label: member.name ?? member.email ?? member.id ?? "",
+});
+
+export function ContractsPage({
+  contracts = [],
+  users = [],
+  setContracts,
+  searchQuery,
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({
-    employee: "",
-    type: "Full-time",
-    expiryDate: "",
-    salary: "",
-  });
-  const fileInputRef = useRef(null);
+  const [form, setForm] = useState(blankForm);
+  const [formMessage, setFormMessage] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [bcStaff, setBcStaff] = useState([]);
 
-  const filteredContracts = contracts.filter(
-    (c) =>
-      !searchQuery ||
-      c.employee.toLowerCase().includes(searchQuery.toLowerCase())
+  useEffect(() => {
+    fetchStaff()
+      .then((data) => setBcStaff(data || []))
+      .catch((err) => console.error("Failed to fetch BC staff:", err));
+  }, []);
+
+  const staffOptions = useMemo(
+    () => users.map(normalizeUserMember).filter((member) => member.id),
+    [users]
   );
 
-  const handleGenerate = async () => {
-    if (!form.employee || !form.expiryDate) return;
-    setIsLoading(true);
-
-    try {
-      const payload = {
-        ...form,
-        status: "active",
-        fileName: `${form.employee
-          .toLowerCase()
-          .replace(" ", "_")}_contract.pdf`,
-      };
-      const result = await createContract(payload);
-      setContracts((prev) => [...prev, result]);
-      setIsModalOpen(false);
-      setForm({ employee: "", type: "Full-time", expiryDate: "", salary: "" });
-      alert(
-        `Contract generated for ${form.employee}. You can now download the PDF.`
-      );
-    } catch (error) {
-      console.error("Failed to generate contract:", error);
-      alert("Failed to generate contract.");
-    } finally {
-      setIsLoading(false);
-    }
+  const resolveEmployeeName = (employeeNo) => {
+    const member = bcStaff.find(
+      (m) => (m.no ?? m.employeeNo ?? m.id) === employeeNo
+    );
+    if (member) return normalizeStaffMember(member).label;
+    return users.find((u) => u.id === employeeNo)?.name ?? employeeNo;
   };
 
-  const handleImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const contractStats = useMemo(() => {
+    const today = new Date();
+    const nextThirtyDays = new Date(today);
+    nextThirtyDays.setDate(today.getDate() + 30);
+
+    return {
+      total: contracts.length,
+      active: contracts.filter((contract) => contract.status === "active")
+        .length,
+      draft: contracts.filter((contract) => contract.status === "draft").length,
+      expiringSoon: contracts.filter((contract) => {
+        if (!contract.expiryDate) return false;
+        const endDate = new Date(contract.expiryDate);
+        return endDate >= today && endDate <= nextThirtyDays;
+      }).length,
+    };
+  }, [contracts]);
+
+  const filteredContracts = contracts.filter((contract) => {
+    const matchesStatus =
+      statusFilter === "all" ? true : contract.status === statusFilter;
+    if (!matchesStatus) return false;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      contract.contractNo?.toLowerCase().includes(q) ||
+      resolveEmployeeName(contract.employeeNo).toLowerCase().includes(q) ||
+      contract.status?.toLowerCase().includes(q)
+    );
+  });
+
+  const handleOpenModal = (contract = null) => {
+    if (contract) {
+      setEditingContract(contract);
+      setForm({
+        employeeNo: contract.employeeNo ?? "",
+        startDate: contract.startDate ?? "",
+        endDate: contract.endDate ?? contract.expiryDate ?? "",
+        status: toContractStatusLabel(contract.status),
+      });
+    } else {
+      setEditingContract(null);
+      setForm(blankForm);
+    }
+    setFormMessage("");
+    setIsModalOpen(true);
+  };
+
+  const handleDateChange = (field, value) => {
+    if (!value || isAllowedContractDate(value)) {
+      setForm((prev) => ({ ...prev, [field]: value }));
+      setFormMessage("");
+      return;
+    }
+    setFormMessage(LICENSE_MONTHS_MESSAGE);
+  };
+
+  const handleSave = async () => {
+    const validationMessage = getContractValidationMessage(form);
+    if (validationMessage) {
+      setFormMessage(validationMessage);
+      return;
+    }
+    setFormMessage("");
     setIsLoading(true);
 
     try {
       const payload = {
-        employee: file.name.split("_")[0] || "Unknown Employee",
-        type: "Imported",
-        expiryDate: new Date(Date.now() + 365 * 86400000)
-          .toISOString()
-          .split("T")[0],
-        status: "active",
-        fileName: file.name,
+        contractNo:
+          editingContract?.contractNo ??
+          `CT-${Date.now().toString().slice(-8)}`,
+        employeeNo: form.employeeNo,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        status: form.status,
       };
-      const result = await createContract(payload);
-      setContracts((prev) => [...prev, result]);
-      setIsImportModalOpen(false);
-      alert(`Successfully imported ${file.name}`);
+
+      if (editingContract) {
+        const result = await updateContract(editingContract.id, payload);
+        setContracts((prev) =>
+          prev.map((contract) =>
+            contract.id === editingContract.id
+              ? normalizeContractRecord(result)
+              : contract
+          )
+        );
+      } else {
+        const result = await createContract(payload);
+        setContracts((prev) => [...prev, normalizeContractRecord(result)]);
+      }
+
+      setIsModalOpen(false);
+      setForm(blankForm);
+      setFormMessage("");
     } catch (error) {
-      console.error("Failed to import contract:", error);
-      alert("Failed to import contract.");
+      console.error("Failed to save contract:", error);
+      alert(getErrorMessage(error, "Failed to save contract."));
     } finally {
       setIsLoading(false);
     }
@@ -101,30 +248,64 @@ export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">
           Contracts
         </h2>
-        <div className="flex gap-3">
-          <Button
-            variant="ghost"
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            Import PDF
-          </Button>
-          <Button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Generate Contract
-          </Button>
-        </div>
+        <Button
+          onClick={() => handleOpenModal()}
+          className="flex items-center gap-2"
+          disabled={staffOptions.length === 0}
+        >
+          <Plus className="h-4 w-4" />
+          Add Contract
+        </Button>
       </div>
 
-      <Panel title="Employee Contracts">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card
+          title="Total Contracts"
+          value={contractStats.total}
+          hint="All employee contracts"
+          icon={FileText}
+        />
+        <Card
+          title="Active"
+          value={contractStats.active}
+          hint="Currently in force"
+          icon={FileText}
+        />
+        <Card
+          title="Draft"
+          value={contractStats.draft}
+          hint="Pending activation"
+          icon={Edit2}
+        />
+        <Card
+          title="Expiring Soon"
+          value={contractStats.expiringSoon}
+          hint="Ending within 30 days"
+          icon={Trash2}
+        />
+      </div>
+
+      <Panel
+        title="Employee Contracts"
+        right={
+          <Select
+            className="min-w-40"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="terminated">Terminated</option>
+          </Select>
+        }
+      >
         <DataTable
           headers={[
+            "Contract No",
             "Employee",
-            "Contract Type",
+            "Start Date",
             "Expiry Date",
             "Status",
             "Actions",
@@ -137,11 +318,14 @@ export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
               <td className="px-2 py-3">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-slate-400" />
-                  <span className="font-medium">{contract.employee}</span>
+                  <span className="font-medium">{contract.contractNo}</span>
                 </div>
               </td>
               <td className="px-2 py-3 text-slate-600 dark:text-slate-400">
-                {contract.type}
+                {resolveEmployeeName(contract.employeeNo)}
+              </td>
+              <td className="px-2 py-3 text-slate-600 dark:text-slate-400">
+                {contract.startDate}
               </td>
               <td className="px-2 py-3 text-slate-600 dark:text-slate-400">
                 {contract.expiryDate}
@@ -151,11 +335,13 @@ export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
               </td>
               <td className="px-2 py-3">
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" title="View PDF">
-                    <Eye className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" title="Download">
-                    <Download className="h-3 w-3" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="Edit"
+                    onClick={() => handleOpenModal(contract)}
+                  >
+                    <Edit2 className="h-3 w-3" />
                   </Button>
                   <Button
                     variant="danger"
@@ -171,53 +357,39 @@ export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
         />
       </Panel>
 
-      {/* Generate Contract Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Generate New Contract"
+        title={editingContract ? "Edit Contract" : "Create Contract"}
       >
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Employee Name
-            </label>
-            <Input
-              placeholder="e.g. John Doe"
-              value={form.employee}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, employee: e.target.value }))
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Contract Type
+              Employee
             </label>
             <Select
-              value={form.type}
+              value={form.employeeNo}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, type: e.target.value }))
+                setForm((prev) => ({ ...prev, employeeNo: e.target.value }))
               }
             >
-              <option value="Full-time">Full-time</option>
-              <option value="Part-time">Part-time</option>
-              <option value="Contractor">Contractor</option>
-              <option value="Internship">Internship</option>
+              <option value="">Select employee</option>
+              {staffOptions.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.label}
+                </option>
+              ))}
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Monthly Salary
+                Start Date
               </label>
               <Input
-                type="number"
-                placeholder="3000"
-                value={form.salary}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, salary: e.target.value }))
-                }
+                type="date"
+                value={form.startDate}
+                onChange={(e) => handleDateChange("startDate", e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -226,53 +398,45 @@ export function ContractsPage({ contracts = [], setContracts, searchQuery }) {
               </label>
               <Input
                 type="date"
-                value={form.expiryDate}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, expiryDate: e.target.value }))
-                }
+                value={form.endDate}
+                onChange={(e) => handleDateChange("endDate", e.target.value)}
               />
             </div>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Allowed months: January, February, November, December.
+          </p>
+          {formMessage ? (
+            <p className="text-sm text-rose-600 dark:text-rose-400">
+              {formMessage}
+            </p>
+          ) : null}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Status
+            </label>
+            <Select
+              value={form.status}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, status: e.target.value }))
+              }
+            >
+              <option value="Draft">Draft</option>
+              <option value="Active">Active</option>
+              <option value="Expired">Expired</option>
+              <option value="Terminated">Terminated</option>
+            </Select>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleGenerate}>Generate & Sign</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Import PDF Modal */}
-      <Modal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        title="Import Signed Contract"
-      >
-        <div className="space-y-4">
-          <div className="rounded-xl border-2 border-dashed border-slate-200 p-8 text-center dark:border-slate-700">
-            <Upload className="mx-auto h-12 w-12 text-slate-400" />
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Click to upload or drag and drop
-            </p>
-            <p className="text-xs text-slate-400">PDF files only (max 10MB)</p>
-            <input
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              ref={fileInputRef}
-              onChange={handleImport}
-            />
-            <Button
-              variant="ghost"
-              className="mt-4"
-              onClick={() => fileInputRef.current.click()}
-            >
-              Select File
-            </Button>
-          </div>
-          <div className="flex justify-end pt-2">
-            <Button variant="ghost" onClick={() => setIsImportModalOpen(false)}>
-              Cancel
+            <Button onClick={handleSave} disabled={isLoading}>
+              {isLoading
+                ? "Saving..."
+                : editingContract
+                ? "Update Contract"
+                : "Create Contract"}
             </Button>
           </div>
         </div>

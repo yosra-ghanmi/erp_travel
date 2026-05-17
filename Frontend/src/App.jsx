@@ -35,6 +35,7 @@ import { BookingsPage as NewBookingsPage } from "./modules/ReservationsPage";
 import { HRDashboardPage } from "./modules/HRDashboardPage";
 import { SalaryGradesPage } from "./modules/SalaryGradesPage";
 import { ContractsPage } from "./modules/ContractsPage";
+import { PayrollCalendarPage } from "./modules/PayrollCalendarPage";
 import { tFor, getDir } from "./i18n";
 import {
   fetchBookings,
@@ -49,8 +50,6 @@ import {
   createAgency,
   updateAgency,
   deleteAgency,
-  fetchStaff,
-  fetchSalaryGrades,
   fetchContracts,
   fetchNotifications,
   createNotification,
@@ -110,44 +109,27 @@ const normalizeService = (service) => ({
   description: service.description ?? "",
 });
 
-const normalizeStaff = (member) => ({
-  ...member,
-  id: member.no ?? member.id ?? `ST-${Date.now()}`,
-  name:
-    member.firstName && member.lastName
-      ? `${member.firstName} ${member.lastName}`
-      : member.name ?? "Unknown Staff",
-  jobTitle: member.jobTitle ?? member.position ?? "",
-  status: member.status ?? "active",
-  agency_id:
-    member.agency_id ?? member.agency_code ?? member.Agency_Code ?? null,
-  firstName: member.firstName ?? "",
-  lastName: member.lastName ?? "",
-  email: member.email ?? "",
-  phone: member.phone ?? "",
-});
-
-const normalizeSalaryGrade = (grade) => ({
-  ...grade,
-  id: grade.code ?? grade.id ?? `SG-${Date.now()}`,
-  agency_id: grade.agency_id ?? grade.agency_code ?? null,
-  name: grade.name ?? grade.code ?? "Unknown Grade",
-  baseSalary: Number(grade.baseSalary ?? grade.amount ?? 0),
-  bonus: Number(grade.bonus ?? 0),
-  taxRate: Number(grade.taxRate ?? 0),
-});
-
 const normalizeContract = (contract) => ({
   ...contract,
-  id: contract.contractNo ?? contract.id ?? `CT-${Date.now()}`,
-  agency_id: contract.agency_id ?? contract.agency_code ?? null,
+  id:
+    contract.contractNo ??
+    contract.contractno ??
+    contract.id ??
+    `CT-${Date.now()}`,
+  contractNo:
+    contract.contractNo ??
+    contract.contractno ??
+    contract.id ??
+    `CT-${Date.now()}`,
+  agency_id:
+    contract.agency_id ?? contract.agency_code ?? contract.Agency_Code ?? null,
   employee: contract.employeeName ?? contract.employee ?? "Unknown Employee",
-  staffId: contract.employeeNo ?? contract.staffId ?? "",
-  type: contract.contractType ?? contract.type ?? "Full-time",
-  startDate: contract.startDate ?? "",
-  expiryDate: contract.endDate ?? contract.expiryDate ?? "",
-  status: contract.status ?? "active",
-  salaryGradeId: contract.salaryGradeCode ?? contract.salaryGradeId ?? "",
+  employeeNo:
+    contract.employeeNo ?? contract.employeeno ?? contract.staffId ?? "",
+  startDate: contract.startDate ?? contract.startdate ?? "",
+  endDate: contract.endDate ?? contract.enddate ?? contract.expiryDate ?? "",
+  expiryDate: contract.endDate ?? contract.enddate ?? contract.expiryDate ?? "",
+  status: String(contract.status ?? "active").toLowerCase(),
 });
 
 const buildRevenueSeries = (payments, bookings) => {
@@ -234,6 +216,7 @@ function AppWorkspace() {
     role,
     agencyId,
     logout,
+    updateSessionUser,
     impersonateAgency,
     hasPermission,
   } = useAuth();
@@ -253,8 +236,6 @@ function AppWorkspace() {
   const [quotes, setQuotes] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [serviceUsage, setServiceUsage] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [salaryGrades, setSalaryGrades] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [tenantAgencies, setTenantAgencies] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -351,6 +332,7 @@ function AppWorkspace() {
   const handleLanguageChange = async (nextLanguage) => {
     setLanguage(nextLanguage);
     localStorage.setItem("lang", nextLanguage);
+    updateSessionUser?.({ preferred_language: nextLanguage });
     if (sessionUser?.id) {
       try {
         await updateLanguagePreference(nextLanguage);
@@ -388,13 +370,7 @@ function AppWorkspace() {
           invoices: hasPermission("finances", "read")
             ? fetchInvoices()
             : Promise.resolve([]),
-          staff: hasPermission("hr", "read")
-            ? fetchStaff()
-            : Promise.resolve([]),
-          salaryGrades: hasPermission("hr", "read")
-            ? fetchSalaryGrades()
-            : Promise.resolve([]),
-          contracts: hasPermission("hr", "read")
+          contracts: hasPermission("contracts", "read")
             ? fetchContracts()
             : Promise.resolve([]),
         };
@@ -407,8 +383,6 @@ function AppWorkspace() {
           reservationRows,
           quoteRows,
           invoiceRows,
-          staffRows,
-          salaryGradeRows,
           contractRows,
         ] = await Promise.all([
           fetchMap.clients,
@@ -418,8 +392,6 @@ function AppWorkspace() {
           fetchMap.reservations,
           fetchMap.quotes,
           fetchMap.invoices,
-          fetchMap.staff,
-          fetchMap.salaryGrades,
           fetchMap.contracts,
         ]);
 
@@ -445,10 +417,6 @@ function AppWorkspace() {
           status: r.status,
           at: r.reservationdate,
         }));
-        const nextStaff = (staffRows ?? []).map(normalizeStaff);
-        const nextSalaryGrades = (salaryGradeRows ?? []).map(
-          normalizeSalaryGrade
-        );
         const nextContracts = (contractRows ?? []).map(normalizeContract);
 
         setClients(nextClients);
@@ -458,8 +426,6 @@ function AppWorkspace() {
         setQuotes(nextQuotes);
         setInvoices(nextInvoices);
         setServiceUsage(nextUsage);
-        setStaff(nextStaff);
-        setSalaryGrades(nextSalaryGrades);
         setContracts(nextContracts);
       } catch (error) {
         if (!cancelled) {
@@ -477,7 +443,7 @@ function AppWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [agencyId, role]);
 
   const pushNotification = async (text, options = {}) => {
     try {
@@ -517,7 +483,7 @@ function AppWorkspace() {
 
   const scopeByAgency = (rows) => {
     if (!rows || !Array.isArray(rows)) return [];
-    if (role === "superadmin") return rows;
+    if (role === "superadmin" || role === "hr") return rows;
     const hasAgencyScopedRows = rows.some((row) => row?.agency_id);
     if (!hasAgencyScopedRows) return rows;
     return rows.filter((row) => row.agency_id === agencyId);
@@ -528,9 +494,12 @@ function AppWorkspace() {
   const scopedPayments = scopeByAgency(payments);
   const scopedServices = scopeByAgency(services);
   const scopedServiceUsage = scopeByAgency(serviceUsage);
-  const scopedStaff = scopeByAgency(staff);
-  const scopedSalaryGrades = scopeByAgency(salaryGrades);
   const scopedContracts = scopeByAgency(contracts);
+  const scopedWorkforceUsers = users.filter((user) => {
+    if (user.role === "superadmin") return false;
+    if (role === "superadmin" || role === "hr") return true;
+    return user.agency_id === agencyId;
+  });
 
   const revenueSeries = useMemo(
     () => buildRevenueSeries(scopedPayments, scopedBookings),
@@ -698,28 +667,30 @@ function AppWorkspace() {
     if (resolvedModuleKey === "hr_dashboard") {
       return (
         <HRDashboardPage
-          users={users}
-          staff={scopedStaff}
-          salaryGrades={scopedSalaryGrades}
+          users={scopedWorkforceUsers}
           contracts={scopedContracts}
           searchQuery={searchQuery}
+          onNavigate={(key) => navigate(`/app/${key}`)}
         />
       );
     }
     if (resolvedModuleKey === "salary_grades") {
-      return (
-        <SalaryGradesPage
-          salaryGrades={scopedSalaryGrades}
-          setSalaryGrades={setSalaryGrades}
-          searchQuery={searchQuery}
-        />
-      );
+      return <SalaryGradesPage searchQuery={searchQuery} />;
     }
     if (resolvedModuleKey === "contracts") {
       return (
         <ContractsPage
           contracts={scopedContracts}
+          users={scopedWorkforceUsers}
           setContracts={setContracts}
+          searchQuery={searchQuery}
+        />
+      );
+    }
+    if (resolvedModuleKey === "payroll_calendar") {
+      return (
+        <PayrollCalendarPage
+          users={scopedWorkforceUsers}
           searchQuery={searchQuery}
         />
       );
@@ -746,8 +717,6 @@ function AppWorkspace() {
         <StaffManagementPage
           users={users}
           setUsers={setUsers}
-          staff={scopedStaff}
-          setStaff={setStaff}
           agencyId={agencyId}
           searchQuery={searchQuery}
           role={role}

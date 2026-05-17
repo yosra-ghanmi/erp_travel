@@ -201,6 +201,12 @@ class GenerateRequest(BaseModel):
     number_of_nights: Optional[int] = Field(
         None, alias="numberOfNights", description="Number of nights"
     )
+    number_of_persons: Optional[int] = Field(
+        None, alias="numberOfPersons", description="Number of travelers"
+    )
+    all_included: Optional[bool] = Field(
+        False, alias="allIncluded", description="Include transport and guide in the itinerary"
+    )
 
     class Config:
         populate_by_name = True
@@ -330,10 +336,11 @@ class StaffMember(BaseModel):
 
     @property
     def role(self) -> str:
-        # Map job title to one of our roles (Admin, Finance, Agent)
+        # Map job title to one of our payroll roles.
         title = (self.job_title or "").lower()
         if "admin" in title: return "Admin"
         if "finance" in title: return "Finance"
+        if "hr" in title or "human resources" in title: return "HR"
         return "Agent"
 
     @property

@@ -11,7 +11,7 @@ import {
 } from "../services/erpApi";
 
 const formatCurrency = (value) =>
-  `$${Math.round(Number(value || 0)).toLocaleString()}`;
+  `${Math.round(Number(value || 0)).toLocaleString()} TND`;
 
 const STYLE_KEYWORDS = {
   adventure: [
@@ -39,6 +39,7 @@ const STYLE_KEYWORDS = {
 };
 
 const DAY_COLORS = ["#0f766e", "#2563eb", "#9333ea", "#d97706", "#dc2626"];
+const ALL_INCLUDED_RATE = 80;
 
 function normalizePlannerService(service) {
   return {
@@ -52,6 +53,18 @@ function normalizePlannerService(service) {
     longitude: Number(service.longitude ?? 0),
     imageUrl: service.imageurl ?? service.imageUrl ?? "",
   };
+}
+
+function isHotelService(service) {
+  return /hotel|resort/i.test(String(service?.serviceType || ""));
+}
+
+function estimateServiceCost(service, nights, persons) {
+  const price = Number(service?.price || 0);
+  const baseCost = isHotelService(service)
+    ? price * Math.max(Number(nights) || 1, 1)
+    : price;
+  return baseCost * Math.max(Number(persons) || 1, 1);
 }
 
 function scoreService(service, form) {
@@ -96,12 +109,33 @@ function selectPlannerServices(services, form) {
     .sort((a, b) => b.score - a.score || a.service.price - b.service.price)
     .map((entry) => entry.service);
 
-  const withinBudget = prioritized.filter(
-    (service) => !service.price || service.price <= form.dailyBudget * 1.5
-  );
+  const nights = Math.max(Number(form.numberOfNights || 1), 1);
+  const persons = Math.max(Number(form.numberOfPersons || 1), 1);
+  const extraCost = form.allIncluded ? ALL_INCLUDED_RATE * persons * nights : 0;
+  const totalBudget = Number(form.dailyBudget || 0) * nights * persons;
+
+  const withinBudget = prioritized.filter((service) => {
+    const serviceCost = estimateServiceCost(service, nights, persons);
+    return (
+      (!service.price || service.price <= form.dailyBudget * 1.5) &&
+      (totalBudget === 0 || serviceCost + extraCost <= totalBudget)
+    );
+  });
+
   const pool = withinBudget.length ? withinBudget : prioritized;
-  const limit = Math.max(form.numberOfNights * 3, 4);
-  return pool.slice(0, limit);
+  const limit = Math.max(Number(form.numberOfNights || 0) * 3, 4);
+
+  const selected = [];
+  let runningCost = extraCost;
+  for (const service of pool) {
+    const serviceCost = estimateServiceCost(service, nights, persons);
+    if (totalBudget > 0 && runningCost + serviceCost > totalBudget) continue;
+    selected.push(service);
+    runningCost += serviceCost;
+    if (selected.length >= limit) break;
+  }
+
+  return selected;
 }
 
 function hydrateItineraryCoordinates(itinerary, services) {
@@ -269,6 +303,8 @@ export function AIPlannerPage({ clients }) {
     numberOfNights: 3,
     activityStyle: "adventure",
     clientNo: "",
+    numberOfPersons: 1,
+    allIncluded: false,
   });
   const [services, setServices] = useState([]);
   const [matchedServices, setMatchedServices] = useState([]);
@@ -277,10 +313,11 @@ export function AIPlannerPage({ clients }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const totalBudget = useMemo(
-    () => Number(form.dailyBudget || 0) * Number(form.numberOfNights || 0),
-    [form.dailyBudget, form.numberOfNights]
-  );
+  const totalBudget = useMemo(() => {
+    const nights = Math.max(Number(form.numberOfNights || 1), 1);
+    const persons = Math.max(Number(form.numberOfPersons || 1), 1);
+    return Number(form.dailyBudget || 0) * nights * persons;
+  }, [form.dailyBudget, form.numberOfNights, form.numberOfPersons]);
 
   useEffect(() => {
     const loadServices = async () => {
@@ -320,6 +357,12 @@ export function AIPlannerPage({ clients }) {
         );
       }
 
+      const nights = Math.max(Number(form.numberOfNights || 1), 1);
+      const persons = Math.max(Number(form.numberOfPersons || 1), 1);
+      const allIncludedCost = form.allIncluded
+        ? ALL_INCLUDED_RATE * persons * nights
+        : 0;
+
       const payload = {
         client: {
           no: "AI-PLANNER",
@@ -339,17 +382,20 @@ export function AIPlannerPage({ clients }) {
           serviceType: service.serviceType,
           destination: service.location,
           price: service.price,
+          currencyCode: "TND",
           description: service.description,
           latitude: service.latitude,
           longitude: service.longitude,
           imageUrl: service.imageUrl,
         })),
-        days: Number(form.numberOfNights),
+        days: nights,
         destination: form.destination,
         activityStyle: form.activityStyle,
         dailyBudget: Number(form.dailyBudget),
         totalBudget,
-        numberOfNights: Number(form.numberOfNights),
+        numberOfNights: nights,
+        numberOfPersons: persons,
+        allIncluded: form.allIncluded,
       };
 
       const response = await generatePlannerItinerary(payload);
@@ -357,7 +403,10 @@ export function AIPlannerPage({ clients }) {
       hydrated.planningContext = {
         dailyBudget: Number(form.dailyBudget),
         totalBudget,
-        numberOfNights: Number(form.numberOfNights),
+        numberOfNights: nights,
+        numberOfPersons: persons,
+        allIncluded: form.allIncluded,
+        extraCost: allIncludedCost,
         matchedServices: selectedServices.length,
       };
       setItinerary(hydrated);
@@ -386,27 +435,40 @@ export function AIPlannerPage({ clients }) {
 
     try {
       // Calculate total cost based on matched services prices
-      const totalCost = matchedServices.reduce(
-        (sum, service) => sum + (service.price || 0),
-        0
-      );
+      const nights = Math.max(Number(form.numberOfNights || 1), 1);
+      const persons = Math.max(Number(form.numberOfPersons || 1), 1);
+      const allIncludedCost = form.allIncluded
+        ? ALL_INCLUDED_RATE * persons * nights
+        : 0;
+      const totalCost =
+        matchedServices.reduce(
+          (sum, service) => sum + estimateServiceCost(service, nights, persons),
+          0
+        ) + allIncludedCost;
+
+      if (totalCost > totalBudget) {
+        throw new Error(
+          "Selected itinerary exceeds the requested total budget. Reduce budget or nights and try again."
+        );
+      }
 
       const quoteData = {
         clientNo: form.clientNo,
         lineType: "Service",
-        quantity: 1,
-        numberOfNights: Number(form.numberOfNights),
+        quantity: persons,
+        numberOfNights: nights,
         discount_percent: 0,
         quoteDate: "2026-01-15",
         validUntilDate: "2026-02-15",
         status: "Draft",
+        currencyCode: "TND",
         subtotal: totalCost,
         totalAmount: totalCost,
         serviceItems: matchedServices.map((service) => ({
           lineType: "Service",
           serviceCode: service.id,
-          quantity: 1,
-          numberOfNights: 1,
+          quantity: persons,
+          numberOfNights: isHotelService(service) ? nights : 0,
         })),
       };
 
@@ -450,17 +512,52 @@ export function AIPlannerPage({ clients }) {
             }
             placeholder="Daily Budget"
           />
-          <Input
-            type="number"
-            value={form.numberOfNights}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                numberOfNights: Number(event.target.value),
-              }))
-            }
-            placeholder="Number of Nights"
-          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input
+              type="number"
+              min={1}
+              value={form.numberOfNights}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  numberOfNights: Number(event.target.value),
+                }))
+              }
+              placeholder="Number of Nights"
+            />
+            <Input
+              type="number"
+              min={1}
+              value={form.numberOfPersons}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  numberOfPersons: Number(event.target.value),
+                }))
+              }
+              placeholder="Number of Persons"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="allIncluded"
+              type="checkbox"
+              checked={form.allIncluded}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  allIncluded: event.target.checked,
+                }))
+              }
+              className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-500"
+            />
+            <label
+              htmlFor="allIncluded"
+              className="text-sm text-slate-700 dark:text-slate-200"
+            >
+              All inclusive (transport + guide)
+            </label>
+          </div>
           <Select
             value={form.clientNo}
             onChange={(event) =>
@@ -540,15 +637,21 @@ export function AIPlannerPage({ clients }) {
         ) : (
           <div className="space-y-3 text-sm">
             <div className="rounded-xl bg-slate-100 p-3 dark:bg-slate-800">
-              <p className="font-medium text-slate-800 dark:text-slate-100">
+              <p className="font-medium text-slate-800 dark:text-slate-800">
                 {itinerary.summary}
               </p>
               <p className="mt-2 text-xs text-slate-500">
                 Matched services: {itinerary.planningContext?.matchedServices} |
-                Daily budget{" "}
-                {formatCurrency(itinerary.planningContext?.dailyBudget)} | Total
-                budget {formatCurrency(itinerary.planningContext?.totalBudget)}
+                Persons: {itinerary.planningContext?.numberOfPersons} | Daily
+                budget {formatCurrency(itinerary.planningContext?.dailyBudget)}{" "}
+                | Total budget{" "}
+                {formatCurrency(itinerary.planningContext?.totalBudget)}
               </p>
+              {itinerary.planningContext?.allIncluded ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  All-inclusive transport + guide is included in this plan.
+                </p>
+              ) : null}
             </div>
             <div>
               <p className="mb-2 font-medium">Highlights</p>
@@ -590,19 +693,48 @@ export function AIPlannerPage({ clients }) {
                     <div key={service.id} className="flex justify-between">
                       <span>{service.name}</span>
                       <span className="font-medium">
-                        {formatCurrency(service.price)}
+                        {formatCurrency(
+                          estimateServiceCost(
+                            service,
+                            Math.max(Number(form.numberOfNights || 1), 1),
+                            Math.max(Number(form.numberOfPersons || 1), 1)
+                          )
+                        )}
                       </span>
                     </div>
                   ))}
+                  {form.allIncluded ? (
+                    <div className="flex justify-between text-sm">
+                      <span>Transport + Guide</span>
+                      <span className="font-medium">
+                        {formatCurrency(
+                          ALL_INCLUDED_RATE *
+                            Math.max(Number(form.numberOfPersons || 1), 1) *
+                            Math.max(Number(form.numberOfNights || 1), 1)
+                        )}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="mt-2 border-t border-slate-300 pt-2 dark:border-slate-600">
                     <div className="flex justify-between font-semibold">
                       <span>Total Estimated Cost</span>
                       <span className="text-emerald-600 dark:text-emerald-400">
                         {formatCurrency(
                           matchedServices.reduce(
-                            (sum, service) => sum + (service.price || 0),
+                            (sum, service) =>
+                              sum +
+                              estimateServiceCost(
+                                service,
+                                Math.max(Number(form.numberOfNights || 1), 1),
+                                Math.max(Number(form.numberOfPersons || 1), 1)
+                              ),
                             0
-                          )
+                          ) +
+                            (form.allIncluded
+                              ? ALL_INCLUDED_RATE *
+                                Math.max(Number(form.numberOfPersons || 1), 1) *
+                                Math.max(Number(form.numberOfNights || 1), 1)
+                              : 0)
                         )}
                       </span>
                     </div>

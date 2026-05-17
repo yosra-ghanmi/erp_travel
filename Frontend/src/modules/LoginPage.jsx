@@ -20,29 +20,6 @@ import { useAuth } from "../context/authCore";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <path
-        d="M21.35 11.1H12v2.98h5.38c-.23 1.52-1.15 2.8-2.45 3.66v2.98h3.97c2.33-2.15 3.68-5.32 3.68-9.08 0-.77-.07-1.52-.23-2.24Z"
-        fill="#4285F4"
-      />
-      <path
-        d="M12 22c2.65 0 4.87-.88 6.5-2.39l-3.97-2.98c-1.1.75-2.51 1.2-4.03 1.2-3.1 0-5.73-2.1-6.67-4.93H-.3v3.1A10.97 10.97 0 0 0 12 22Z"
-        fill="#34A853"
-      />
-      <path
-        d="M3.83 12.9a6.62 6.62 0 0 1 0-1.8V8H-.3A10.95 10.95 0 0 0-.3 16l4.13-3.1Z"
-        fill="#fbb905ff"
-      />
-      <path
-        d="M12 4.35c1.44 0 2.74.5 3.76 1.47l2.82-2.82A10.9 10.9 0 0 0 12 1 10.97 10.97 0 0 0-.3 8l4.13 3.1c.94-2.83 3.57-4.93 8.17-4.93Z"
-        fill="#EA4335"
-      />
-    </svg>
-  );
-}
-
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -58,9 +35,7 @@ export function LoginPage() {
       const stored = window.localStorage.getItem("navigo-login-theme");
       if (stored === "dark") return true;
       if (stored === "light") return false;
-    } catch {
-      // Ignore storage access issues
-    }
+    } catch {}
 
     return typeof window.matchMedia === "function"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -179,8 +154,8 @@ export function LoginPage() {
                 style={{ backgroundImage: `url(${p1})` }}
                 aria-hidden="true"
               />
-              <div className="absolute inset-0 bg-slate-950/70 mix-blend-multiply" />
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/30 via-[#0EA5E9]/20 to-blue-900/60" />
+              <div className="absolute inset-0 bg-slate-950/40 mix-blend-multiply" />
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/50 via-[#0EA5E9]/40 to-blue-900/40" />
               <div className="relative z-10 flex h-full flex-col justify-between p-10 text-white xl:p-12">
                 <div>
                   <div className="inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold uppercase tracking-widest backdrop-blur-xl">
@@ -249,7 +224,7 @@ export function LoginPage() {
                   )}
                 </button>
               </div>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_20%,rgba(14,165,233,0.08),transparent_55%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_20%,rgba(14,165,233,0.16),transparent_55%)]" />
               <div className="relative mx-auto flex h-full w-full max-w-md flex-col justify-center py-3">
                 <MotionDiv {...motionItem} className="mb-3 mt-1 text-center">
                   <p className="mx-auto mb-1.5 inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-[#F97316] transition-all duration-300 ease-in-out hover:shadow-lg hover:shadow-orange-200/60 dark:bg-orange-500/10 dark:text-orange-300">

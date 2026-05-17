@@ -73,6 +73,10 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("erp_session");
   };
 
+  const updateSessionUser = (updates) => {
+    setSessionUser((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
   const impersonateAgency = (agencyId) => {
     const agencyAdmin = users.find(
       (user) => user.role === "admin" && user.agency_id === agencyId
@@ -98,6 +102,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    updateSessionUser,
     impersonateAgency,
     hasPermission,
     permissions: sessionUser ? permissionsMap[sessionUser.role] : null,

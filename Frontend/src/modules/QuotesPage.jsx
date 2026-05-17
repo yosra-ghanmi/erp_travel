@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import logo from "../assets/logo.png";
 import {
   Button,
   DataTable,
@@ -35,6 +36,15 @@ const initialForm = {
   validUntilDate: "2026-02-15",
   status: "Draft",
 };
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = (error) => reject(error);
+    img.src = src;
+  });
 
 export function QuotesPage({ agencyId, searchQuery }) {
   const [quotes, setQuotes] = useState([]);
@@ -399,23 +409,30 @@ export function QuotesPage({ agencyId, searchQuery }) {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
+    try {
+      const logoImage = await loadImage(logo);
+      doc.addImage(logoImage, "PNG", 14, 14, 28, 28);
+    } catch (error) {
+      console.warn("Unable to load logo for PDF:", error);
+    }
+
     // Header
     doc.setFontSize(20);
     doc.setTextColor(40, 40, 40);
-    doc.text("TRAVEL QUOTE", pageWidth / 2, 20, { align: "center" });
+    doc.text("TRAVEL QUOTE", pageWidth / 2, 24, { align: "center" });
 
     // Agency Info
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text("Smart Travel Agency", 14, 30);
-    doc.text("123 Travel Avenue, Tourism City", 14, 35);
+    doc.text("Navigo Travel Agency", 14, 50);
+    doc.text("123 Travel Avenue, Tourism City", 14, 55);
 
     // Quote Details
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Quote No: ${quote.quoteNo}`, 14, 50);
-    doc.text(`Date: ${quote.quoteDate || "N/A"}`, 14, 57);
-    doc.text(`Valid Until: ${quote.validUntilDate || "N/A"}`, 14, 64);
+    doc.text(`Quote No: ${quote.quoteNo}`, 14, 64);
+    doc.text(`Date: ${quote.quoteDate || "N/A"}`, 14, 71);
+    doc.text(`Valid Until: ${quote.validUntilDate || "N/A"}`, 14, 78);
 
     // Client Info
     const clientName =
@@ -424,7 +441,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
         ?.name ||
       quote.clientNo ||
       "N/A";
-    doc.text(`Client: ${clientName}`, 14, 75);
+    doc.text(`Client: ${clientName}`, 14, 89);
 
     // Services Table
     const tableRows =
@@ -443,16 +460,16 @@ export function QuotesPage({ agencyId, searchQuery }) {
               line.numberofnights || line.numberOfNights || 1,
               line.quantity || 1,
               `${line.unitprice || line.unit_price || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
               `${line.pricepernighttotal || line.pricePerNightTotal || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
               `${line.priceperpersontotal || line.pricePerPersonTotal || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
               `${line.lineamount || line.line_amount || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
             ];
           })
@@ -462,22 +479,22 @@ export function QuotesPage({ agencyId, searchQuery }) {
               1,
               1,
               `${quote.subtotal || quote.totalAmount || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
               `${quote.subtotal || quote.totalAmount || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
               `${quote.subtotal || quote.totalAmount || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
               `${quote.subtotal || quote.totalAmount || 0} ${
-                quote.currencyCode || "USD"
+                quote.currencyCode || "TND"
               }`,
             ],
           ];
 
     autoTable(doc, {
-      startY: 85,
+      startY: 100,
       head: [
         [
           "Service Description",
@@ -500,13 +517,13 @@ export function QuotesPage({ agencyId, searchQuery }) {
     doc.setFontSize(11);
     if (quote.discount_percent > 0) {
       doc.text(
-        `Subtotal: ${quote.subtotal || 0} ${quote.currencyCode || "USD"}`,
+        `Subtotal: ${quote.subtotal || 0} ${quote.currencyCode || "TND"}`,
         pageWidth - 80,
         finalY
       );
       doc.text(
         `Discount (${quote.discount_percent}%): -${quote.discountAmount || 0} ${
-          quote.currencyCode || "USD"
+          quote.currencyCode || "TND"
         }`,
         pageWidth - 80,
         finalY + 7
@@ -514,7 +531,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
       doc.setFontSize(13);
       doc.setFont(undefined, "bold");
       doc.text(
-        `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
+        `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "TND"}`,
         pageWidth - 80,
         finalY + 16
       );
@@ -522,7 +539,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
       doc.setFontSize(13);
       doc.setFont(undefined, "bold");
       doc.text(
-        `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "USD"}`,
+        `TOTAL: ${quote.totalAmount || 0} ${quote.currencyCode || "TND"}`,
         pageWidth - 80,
         finalY
       );
@@ -645,7 +662,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
                       quote.clientNo}
                   </td>
                   <td className="px-2 py-3 font-bold text-slate-900 dark:text-white">
-                    {quote.totalAmount || 0} {quote.currencyCode || "USD"}
+                    {quote.totalAmount || 0} {quote.currencyCode || "TND"}
                   </td>
                   <td className="px-2 py-3">
                     <StatusBadge value={status.toLowerCase()} />

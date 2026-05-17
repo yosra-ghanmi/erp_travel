@@ -78,7 +78,7 @@ class BCClient:
     def _get_company_id(self) -> str:
         if self._company_id:
             return self._company_id
-        
+
         # Try to resolve company name to ID via OData
         url = f"{self._api_root()}/Company"
         try:

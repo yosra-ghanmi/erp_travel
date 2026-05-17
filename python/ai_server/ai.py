@@ -14,13 +14,17 @@ def build_travel_prompt(req: GenerateRequest) -> str:
     activity_style = req.activity_style or "flexible"
     budget_lines = []
     if req.daily_budget is not None:
-        budget_lines.append(f"- Daily budget: ${req.daily_budget:.2f}")
+        budget_lines.append(f"- Daily budget: {req.daily_budget:.2f} TND")
     if req.total_budget is not None:
-        budget_lines.append(f"- Total budget: ${req.total_budget:.2f}")
+        budget_lines.append(f"- Total budget: {req.total_budget:.2f} TND")
     if req.number_of_nights is not None:
         budget_lines.append(f"- Nights: {req.number_of_nights}")
+    if req.number_of_persons is not None:
+        budget_lines.append(f"- Persons: {req.number_of_persons}")
     if req.destination:
         budget_lines.append(f"- Destination: {req.destination}")
+    if req.all_included:
+        budget_lines.append("- All-inclusive transport and guide requested")
     budget_block = "\n".join(budget_lines) if budget_lines else "- Budget: Not specified"
     
     prompt = f"""You are an expert travel agent. Create a detailed, engaging {days}-day travel itinerary for a client.
@@ -57,7 +61,9 @@ Requirements:
 4. Provide travel tips and local recommendations.
 5. Ensure the itinerary flows logically based on locations.
 6. Respect the requested style and budget.
-7. Use the provided coordinates and locations whenever possible.
+7. Include transport and a local guide in the itinerary if the package is marked all-inclusive.
+8. All prices and budgets are in Tunisian Dinar (TND).
+9. Use the provided coordinates and locations whenever possible.
 
 You MUST respond with ONLY a valid JSON object matching this exact structure:
 {{

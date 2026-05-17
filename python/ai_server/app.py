@@ -1090,11 +1090,32 @@ def create_payment(payment: TravelPayment, client: SecureBCClient = Depends(get_
         payload = json.loads(payment.json(by_alias=True, exclude_none=True))
         if not payload.get("paymentId"):
             payload["paymentId"] = f"PAY-{int(time.time())}"
+
+        invoice_no = payload.get("invoiceNo")
+        if invoice_no:
+            try:
+                invoice_results = client.secure_get("invoices", entity_id=invoice_no)
+                if invoice_results:
+                    invoice_record = invoice_results[0]
+                    invoice_currency = (
+                        invoice_record.get("currencycode")
+                        or invoice_record.get("currencyCode")
+                        or invoice_record.get("currency")
+                    )
+                    if invoice_currency and invoice_currency.upper() != "TND":
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Payments can only be recorded against TND invoices."
+                        )
+            except HTTPException:
+                raise
+            except Exception as invoice_err:
+                logger.warning(f"Failed to validate invoice currency before payment creation: {invoice_err}")
+
         payment_result = client.secure_create("payments", payload)
         _sync_payment_history([payment_result])
 
         automation_result = None
-        invoice_no = payload.get("invoiceNo")
         if invoice_no:
             try:
                 invoice_results = client.secure_get("invoices", entity_id=invoice_no)
@@ -1360,10 +1381,40 @@ def get_contracts(client: SecureBCClient = Depends(get_secure_bc_client)):
 @app.post("/api/contracts")
 def create_contract(contract_data: Dict, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
+        employee_no = contract_data.get("employeeNo") or contract_data.get("employeeno")
+        if employee_no:
+            matching_user = next(
+                (user for user in _load_users() if user.get("id") == employee_no),
+                None,
+            )
+            if matching_user:
+                admin_bc = SecureBCClient(user_role="superadmin")
+                existing_staff = admin_bc.secure_get(
+                    "staff",
+                    filters=[f"no eq '{employee_no}'"],
+                    top=1,
+                )
+                if not existing_staff:
+                    full_name = matching_user.get("name", "").strip()
+                    names = full_name.split(" ", 1)
+                    admin_bc.secure_create(
+                        "staff",
+                        {
+                            "no": matching_user.get("id"),
+                            "firstName": names[0] if names else matching_user.get("id", ""),
+                            "lastName": names[1] if len(names) > 1 else "",
+                            "jobTitle": matching_user.get("role", "agent"),
+                            "companyEmail": matching_user.get("email", ""),
+                            "status": "Active",
+                            "Agency_Code": matching_user.get("agency_id", ""),
+                        },
+                    )
         return client.secure_create("contracts", contract_data)
     except Exception as e:
-        logger.error(f"Error creating contract: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        detail = str(e)
+        logger.error(f"Error creating contract: {detail}")
+        status_code = 400 if "400 Client Error" in detail or "Status 400" in detail else 500
+        raise HTTPException(status_code=status_code, detail=detail)
 
 
 @app.patch("/api/contracts/{contract_id}")
@@ -1460,6 +1511,7 @@ def get_services(client: SecureBCClient = Depends(get_secure_bc_client)):
 def create_service(service: TravelService, client: SecureBCClient = Depends(get_secure_bc_client)):
     try:
         payload = service.dict(by_alias=True, exclude_none=True)
+        payload["currencyCode"] = "TND"
         if not payload.get("code"):
             payload["code"] = f"SV-{int(time.time())}"
         return client.secure_create("services", payload)
@@ -1566,12 +1618,15 @@ def create_quote(quote: TravelQuote, client: SecureBCClient = Depends(get_secure
         
         if not header_payload.get("quoteNo"):
             header_payload["quoteNo"] = f"QT-{int(time.time())}"
-            
+        if not header_payload.get("currencyCode"):
+            header_payload["currencyCode"] = "TND"
+
         # 2. Create Header (triggers first line in BC)
         result = client.secure_create("quotes", header_payload)
         quote_no = result.get("quoteno")
         
         # 3. Create additional lines if multiple items provided
+        failed_lines = []
         if len(service_items) > 1:
             for i, item in enumerate(service_items[1:]):
                 _ensure_offer_synced(item["serviceCode"], item.get("lineType", "Service"))
@@ -1581,13 +1636,36 @@ def create_quote(quote: TravelQuote, client: SecureBCClient = Depends(get_secure
                     "lineType": item.get("lineType", "Service"),
                     "serviceCode": item["serviceCode"],
                     "quantity": item.get("quantity", 1),
-                    "numberOfNights": item.get("numberOfNights", 1)
+                    "numberOfNights": item.get("numberOfNights", 1),
                 }
                 try:
                     client.secure_create("quote_lines", line_payload)
                 except Exception as line_err:
-                    logger.warning(f"Failed to create additional line for {item['serviceCode']}: {line_err}")
-                    
+                    failed_lines.append(
+                        f"{item['serviceCode']}: {str(line_err)}"
+                    )
+
+        if failed_lines:
+            error_detail = (
+                f"Quote created but failed to create additional quote lines: "
+                + "; ".join(failed_lines)
+            )
+            try:
+                client.secure_delete("quotes", quote_no)
+            except Exception as delete_err:
+                logger.warning(
+                    f"Failed to delete incomplete quote {quote_no}: {delete_err}"
+                )
+            raise HTTPException(status_code=500, detail=error_detail)
+
+        # Refresh the quote header after all lines are created so totals are up to date.
+        try:
+            refreshed_quote = client.secure_get("quotes", quote_no)
+            if refreshed_quote:
+                return refreshed_quote[0]
+        except Exception as refresh_err:
+            logger.warning(f"Failed to refresh quote header after line creation: {refresh_err}")
+
         return result
     except Exception as e:
         logger.error(f"Error creating quote in BC: {e}")
@@ -1654,6 +1732,9 @@ def create_invoice(invoice: TravelInvoice, client: SecureBCClient = Depends(get_
         
         # Extract invoice lines before creating the main invoice
         invoice_lines_data = processed_payload.pop("travelInvoiceLines", [])
+
+        if not processed_payload.get("currencyCode"):
+            processed_payload["currencyCode"] = "TND"
 
         # Create the main invoice record
         created_invoice = client.secure_create("invoices", processed_payload)

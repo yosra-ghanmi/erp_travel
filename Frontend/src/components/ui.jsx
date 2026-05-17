@@ -47,6 +47,14 @@ export function StatusBadge({ value }) {
     vip: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
     active:
       "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-400",
+    inactive:
+      "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+    draft:
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    expired:
+      "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+    terminated:
+      "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
     suspended:
       "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
     lead: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",

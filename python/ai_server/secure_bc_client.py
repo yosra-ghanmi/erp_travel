@@ -164,9 +164,9 @@ class SecureBCClient:
             "endpoint": "TravelQuoteLineAPI",
             "api_endpoint": "travelQuoteLines",
             "filter_field": "Agency_Code",
-            "agent_field": "agent_code",
+            "agent_field": None,
             "id_field": "lineNo",
-            "writable_fields": ["quoteNo", "lineNo", "lineType", "serviceCode", "quantity", "numberOfNights", "agent_code", "Agency_Code"]
+            "writable_fields": ["quoteNo", "lineNo", "lineType", "serviceCode", "quantity", "numberOfNights", "Agency_Code"]
         },
         "invoice_lines": {
             "endpoint": "TravelInvoiceLineAPI",
@@ -190,7 +190,7 @@ class SecureBCClient:
             "filter_field": "Agency_Code",
             "agent_field": None,
             "id_field": "no",
-            "writable_fields": ["no", "firstName", "lastName", "jobTitle", "status", "Agency_Code"]
+            "writable_fields": ["no", "firstName", "lastName", "jobTitle", "companyEmail", "status", "Agency_Code"]
         },
         "salary_grades": {
             "endpoint": "SalaryGradeAPI",
