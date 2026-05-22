@@ -49,10 +49,10 @@ export const permissionsMap = {
     ai: { create: true, read: true, update: true, delete: false },
   },
   finance: {
-    agencies: { create: false, read: true, update: false, delete: false },
+    agencies: { create: false, read: false, update: false, delete: false },
     staff: { create: false, read: true, update: false, delete: false },
-    clients: { create: false, read: true, update: false, delete: false },
-    bookings: { create: false, read: true, update: false, delete: false },
+    clients: { create: false, read: false, update: false, delete: false },
+    bookings: { create: false, read: false, update: false, delete: false },
     services: {
       create: false,
       read: false,

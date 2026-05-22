@@ -120,5 +120,16 @@
     "expenseId": "EXP-1778180054",
     "status": "Synchronized",
     "Agency_Code": "AG-001"
+  },
+  {
+    "date": "2026-01-15",
+    "expenseType": "Marketing",
+    "amount": 1200.0,
+    "description": "marketing",
+    "sourceInvoiceId": null,
+    "recipientId": null,
+    "expenseId": "EXP-1779111072",
+    "status": "Synchronized",
+    "Agency_Code": ""
   }
 ]

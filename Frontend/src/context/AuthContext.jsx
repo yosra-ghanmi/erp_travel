@@ -44,6 +44,10 @@ export function AuthProvider({ children }) {
     try {
       const user = await loginUser({ email, password });
       setSessionUser(user);
+      localStorage.setItem("erp_session", JSON.stringify(user));
+      registerSession(sessionToken).catch((err) =>
+        console.error("Failed to register session:", err)
+      );
       return user;
     } catch (error) {
       const message = error.response?.data?.detail || "Invalid credentials";

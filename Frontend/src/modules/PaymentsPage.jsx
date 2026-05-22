@@ -10,6 +10,7 @@ import {
   Select,
   StatusBadge,
 } from "../components/ui";
+import { useAuth } from "../context/authCore";
 import {
   fetchPayments,
   createPayment,
@@ -39,6 +40,7 @@ const loadImage = (src) =>
   });
 
 export function PaymentsPage({ searchQuery }) {
+  const { hasPermission } = useAuth();
   const [payments, setPayments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
@@ -96,18 +98,24 @@ export function PaymentsPage({ searchQuery }) {
     const loadData = async () => {
       try {
         setLoading(true);
+        const clientPromise = hasPermission("clients", "read")
+          ? fetchClients()
+          : Promise.resolve([]);
+
         const [pData, iData, cData] = await Promise.all([
           fetchPayments(),
           fetchInvoices(),
-          fetchClients(),
+          clientPromise,
         ]);
+
         setPayments(pData || []);
         const normalizedInvoices = (iData || []).map(normalizeInvoice);
         setInvoices(normalizedInvoices);
         setClients(cData || []);
       } catch (err) {
         console.error("Failed to load payments data:", err);
-        setError("Failed to load data from Business Central.");
+        const detail = err?.response?.data?.detail || err?.message || "Unknown error";
+        setError(`Failed to load data from Business Central: ${detail}`);
       } finally {
         setLoading(false);
       }
