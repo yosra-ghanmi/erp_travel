@@ -15,6 +15,22 @@ router = APIRouter(prefix="/api/payroll", tags=["payroll"])
 PAYROLL_DATA = {}
 COMMISSION_DATA = {}
 
+
+def normalize_payroll_month(payroll_month: str) -> str:
+    """Accept YYYY-MM or YYYY-MM-DD and normalize to YYYY-MM."""
+    if not payroll_month:
+        raise HTTPException(status_code=400, detail="payrollMonth is required")
+
+    parts = payroll_month.split("-")
+    if len(parts) < 2:
+        raise HTTPException(status_code=400, detail="payrollMonth must be in YYYY-MM format")
+
+    year, month = parts[0], parts[1]
+    if len(year) != 4 or len(month) != 2:
+        raise HTTPException(status_code=400, detail="payrollMonth must be in YYYY-MM format")
+
+    return f"{year}-{month}"
+
 class PayrollGenerator:
     """Handles payroll generation logic"""
     
@@ -25,6 +41,7 @@ class PayrollGenerator:
         Calls Business Central PayrollManagement codeunit.
         """
         try:
+            payroll_month = normalize_payroll_month(payroll_month)
             logger.info(f"Generating payroll for {payroll_month}")
             
             # Parse the month
@@ -66,6 +83,7 @@ class PayrollGenerator:
         Calls BC TravelPayrollEntry API.
         """
         try:
+            payroll_month = normalize_payroll_month(payroll_month)
             if payroll_month not in PAYROLL_DATA:
                 return {
                     "entries": [],
@@ -98,6 +116,7 @@ class PayrollGenerator:
         Get summary totals for payroll month.
         """
         try:
+            payroll_month = normalize_payroll_month(payroll_month)
             if payroll_month not in PAYROLL_DATA:
                 return {
                     "totalGross": 0.0,
@@ -137,7 +156,7 @@ async def generate_payroll(
     Triggers monthly payroll generation for all active employees.
     """
     try:
-        payroll_month = payload.get("payrollMonth")
+        payroll_month = normalize_payroll_month(payload.get("payrollMonth"))
         if not payroll_month:
             raise HTTPException(status_code=400, detail="payrollMonth is required")
         
@@ -173,6 +192,7 @@ async def get_payroll_entries(
         if not payroll_month:
             raise HTTPException(status_code=400, detail="payrollMonth is required")
         
+        payroll_month = normalize_payroll_month(payroll_month)
         result = PayrollGenerator.get_payroll_entries(payroll_month, page, page_size, client)
         return result
         
@@ -196,6 +216,7 @@ async def get_payroll_summary(
         if not payroll_month:
             raise HTTPException(status_code=400, detail="payrollMonth is required")
         
+        payroll_month = normalize_payroll_month(payroll_month)
         result = PayrollGenerator.get_payroll_summary(payroll_month, client)
         return result
         
@@ -249,7 +270,7 @@ async def post_payroll(
     Post payroll to the general ledger.
     """
     try:
-        payroll_month = payload.get("payrollMonth")
+        payroll_month = normalize_payroll_month(payload.get("payrollMonth"))
         if not payroll_month:
             raise HTTPException(status_code=400, detail="payrollMonth is required")
         

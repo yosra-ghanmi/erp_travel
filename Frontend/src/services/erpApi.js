@@ -353,7 +353,10 @@ export const fetchPlatformOverview = async () => {
 // Payroll
 export const generateMonthlyPayroll = async (payrollMonth) => {
   const { data } = await api.post("/api/payroll/generate", { payrollMonth });
-  return data;
+  return {
+    ...data,
+    entries_created: data.entries_created ?? data.entriesCreated ?? 0,
+  };
 };
 
 export const fetchPayrollEntries = async (
@@ -362,16 +365,34 @@ export const fetchPayrollEntries = async (
   pageSize = 10
 ) => {
   const { data } = await api.get("/api/payroll/entries", {
-    params: { payrollMonth, page, pageSize },
+    params: {
+      payroll_month: payrollMonth,
+      page,
+      page_size: pageSize,
+    },
   });
-  return data;
+
+  return {
+    ...data,
+    entries: data.entries || [],
+    total_entries: data.total_entries ?? data.totalEntries ?? 0,
+    current_page: data.current_page ?? data.currentPage ?? page,
+    page_size: data.page_size ?? data.pageSize ?? pageSize,
+  };
 };
 
 export const fetchPayrollSummary = async (payrollMonth) => {
   const { data } = await api.get("/api/payroll/summary", {
-    params: { payrollMonth },
+    params: { payroll_month: payrollMonth },
   });
-  return data;
+
+  return {
+    ...data,
+    total_gross: data.total_gross ?? data.totalGross ?? 0,
+    total_deductions: data.total_deductions ?? data.totalDeductions ?? 0,
+    total_net: data.total_net ?? data.totalNet ?? 0,
+    total_entries: data.total_entries ?? data.totalEntries ?? 0,
+  };
 };
 
 export const approvePayrollEntry = async (entryNo) => {

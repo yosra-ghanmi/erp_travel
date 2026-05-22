@@ -19,6 +19,7 @@ import {
 } from "../services/erpApi";
 
 const ITEMS_PER_PAGE = 10;
+const PAYROLL_ALLOWED_ROLES = ["hr", "admin", "superadmin"];
 
 export function PayrollGenerator() {
   const { role } = useAuth();
@@ -45,6 +46,12 @@ export function PayrollGenerator() {
       year: "numeric",
     });
   }, [selectedMonth]);
+  const payrollMonth = monthValue;
+
+  const canManagePayroll = PAYROLL_ALLOWED_ROLES.includes(role);
+
+  const getErrorMessage = (err, fallback) =>
+    err.response?.data?.message || err.response?.data?.detail || fallback;
 
   // Load payroll entries when month or page changes
   useEffect(() => {
@@ -54,17 +61,13 @@ export function PayrollGenerator() {
       setError("");
       try {
         const [entries, summary] = await Promise.all([
-          fetchPayrollEntries(
-            selectedMonth.toISOString().split("T")[0],
-            currentPage,
-            ITEMS_PER_PAGE
-          ),
-          fetchPayrollSummary(selectedMonth.toISOString().split("T")[0]),
+          fetchPayrollEntries(payrollMonth, currentPage, ITEMS_PER_PAGE),
+          fetchPayrollSummary(payrollMonth),
         ]);
         setPayrollEntries(entries.entries || []);
         setPayrollSummary(summary);
       } catch (err) {
-        setError(err.response?.data?.message || "Failed to load payroll data");
+        setError(getErrorMessage(err, "Failed to load payroll data"));
         setPayrollEntries([]);
       } finally {
         setIsLoading(false);
@@ -72,7 +75,7 @@ export function PayrollGenerator() {
     };
 
     loadPayrollData();
-  }, [selectedMonth, currentPage]);
+  }, [currentPage, payrollMonth, selectedMonth]);
 
   const handleMonthChange = (e) => {
     const [year, month] = e.target.value.split("-");
@@ -81,7 +84,7 @@ export function PayrollGenerator() {
   };
 
   const handleGeneratePayroll = async () => {
-    if (role !== "HR" && role !== "Admin") {
+    if (!canManagePayroll) {
       setError("Only HR Manager or Admin can generate payroll");
       return;
     }
@@ -91,34 +94,30 @@ export function PayrollGenerator() {
     setSuccess("");
 
     try {
-      const result = await generateMonthlyPayroll(
-        selectedMonth.toISOString().split("T")[0]
-      );
+      const result = await generateMonthlyPayroll(payrollMonth);
       setSuccess(
         `Payroll generated successfully for ${result.entries_created} employees.`
       );
 
       // Reload payroll data
       const entries = await fetchPayrollEntries(
-        selectedMonth.toISOString().split("T")[0],
+        payrollMonth,
         1,
         ITEMS_PER_PAGE
       );
-      const summary = await fetchPayrollSummary(
-        selectedMonth.toISOString().split("T")[0]
-      );
+      const summary = await fetchPayrollSummary(payrollMonth);
       setPayrollEntries(entries.entries || []);
       setPayrollSummary(summary);
       setCurrentPage(1);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to generate payroll");
+      setError(getErrorMessage(err, "Failed to generate payroll"));
     } finally {
       isGeneratingSet(false);
     }
   };
 
   const handlePostPayroll = async () => {
-    if (role !== "HR" && role !== "Admin") {
+    if (!canManagePayroll) {
       setError("Only HR Manager or Admin can post payroll");
       return;
     }
@@ -136,22 +135,20 @@ export function PayrollGenerator() {
     setSuccess("");
 
     try {
-      await postPayroll(selectedMonth.toISOString().split("T")[0]);
+      await postPayroll(payrollMonth);
       setSuccess("Payroll posted successfully to the general ledger.");
 
       // Reload payroll data
       const entries = await fetchPayrollEntries(
-        selectedMonth.toISOString().split("T")[0],
+        payrollMonth,
         currentPage,
         ITEMS_PER_PAGE
       );
-      const summary = await fetchPayrollSummary(
-        selectedMonth.toISOString().split("T")[0]
-      );
+      const summary = await fetchPayrollSummary(payrollMonth);
       setPayrollEntries(entries.entries || []);
       setPayrollSummary(summary);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to post payroll");
+      setError(getErrorMessage(err, "Failed to post payroll"));
     } finally {
       isPostingSet(false);
     }
@@ -278,12 +275,7 @@ export function PayrollGenerator() {
 
           <Button
             onClick={handleGeneratePayroll}
-            disabled={
-              isGenerating ||
-              isLoading ||
-              !role ||
-              (role !== "HR" && role !== "Admin")
-            }
+            disabled={isGenerating || isLoading || !role || !canManagePayroll}
             className="w-full sm:w-auto flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
@@ -498,7 +490,7 @@ export function PayrollGenerator() {
               Select a month and click "Generate Payroll" to create payroll
               entries for all active employees.
             </p>
-            {role && (role === "HR" || role === "Admin") && (
+            {canManagePayroll && (
               <p className="text-sm text-blue-600 dark:text-blue-400">
                 You have permission to generate payroll.
               </p>
