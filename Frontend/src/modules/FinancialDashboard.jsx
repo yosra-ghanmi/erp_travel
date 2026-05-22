@@ -24,6 +24,7 @@ import {
 import { useAuth } from "../context/authCore";
 import { Card, Panel, Button } from "../components/ui";
 import { fetchPayments, fetchExpenses, sendEmail } from "../services/erpApi";
+import { PayrollGenerator } from "./PayrollGenerator";
 
 export function FinancialDashboard() {
   const [payments, setPayments] = useState([]);
@@ -32,6 +33,7 @@ export function FinancialDashboard() {
   const [reportMessage, setReportMessage] = useState("");
   const [reportError, setReportError] = useState("");
   const [isSendingReport, setIsSendingReport] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
   const revenueChartRef = useRef(null);
   const expenseChartRef = useRef(null);
   const { users, role } = useAuth();
@@ -334,162 +336,196 @@ export function FinancialDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
-            Financial Dashboard
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Generate periodic financial reports for superadmin review.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-            <Filter className="h-4 w-4" />
-            <span className="font-medium">Report period</span>
-          </div>
-          <div className="flex flex-wrap gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
-            {reportRanges.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setReportRange(option.value)}
-                className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
-                  reportRange === option.value
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <Button variant="ghost" onClick={exportCsv} className="gap-2">
-            <Download className="h-4 w-4" />
-            CSV
-          </Button>
-          <Button variant="ghost" onClick={exportPdf} className="gap-2">
-            <Download className="h-4 w-4" />
-            PDF
-          </Button>
-          {role === "finance" && (
-            <Button
-              variant="primary"
-              onClick={handleSendToSuperadmin}
-              disabled={isSendingReport}
-              className="gap-2"
-            >
-              <ArrowUpRight className="h-4 w-4" />
-              {isSendingReport ? "Sending..." : "Send to Superadmin"}
-            </Button>
-          )}
-        </div>
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-2 font-medium border-b-2 transition ${
+            activeTab === "overview"
+              ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+              : "border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+          }`}
+        >
+          Financial Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("payroll")}
+          className={`px-4 py-2 font-medium border-b-2 transition ${
+            activeTab === "payroll"
+              ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+              : "border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+          }`}
+        >
+          Payroll Management
+        </button>
       </div>
 
-      {(reportMessage || reportError) && (
-        <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950">
-          {reportMessage && <p className="text-emerald-600">{reportMessage}</p>}
-          {reportError && <p className="text-rose-500">{reportError}</p>}
-        </div>
+      {/* Overview Tab */}
+      {activeTab === "overview" && (
+        <>
+          <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
+                Financial Dashboard
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Generate periodic financial reports for superadmin review.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                <Filter className="h-4 w-4" />
+                <span className="font-medium">Report period</span>
+              </div>
+              <div className="flex flex-wrap gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
+                {reportRanges.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setReportRange(option.value)}
+                    className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                      reportRange === option.value
+                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <Button variant="ghost" onClick={exportCsv} className="gap-2">
+                <Download className="h-4 w-4" />
+                CSV
+              </Button>
+              <Button variant="ghost" onClick={exportPdf} className="gap-2">
+                <Download className="h-4 w-4" />
+                PDF
+              </Button>
+              {role === "finance" && (
+                <Button
+                  variant="primary"
+                  onClick={handleSendToSuperadmin}
+                  disabled={isSendingReport}
+                  className="gap-2"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  {isSendingReport ? "Sending..." : "Send to Superadmin"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {(reportMessage || reportError) && (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950">
+              {reportMessage && (
+                <p className="text-emerald-600">{reportMessage}</p>
+              )}
+              {reportError && <p className="text-rose-500">{reportError}</p>}
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card
+              title="Total Revenue"
+              value={`$${reportStats.totalRevenue.toLocaleString()}`}
+              icon={DollarSign}
+              hint="Total payments received"
+            />
+            <Card
+              title="Total Expenses"
+              value={`$${reportStats.totalExpenses.toLocaleString()}`}
+              icon={TrendingDown}
+              hint="Operating costs"
+            />
+            <Card
+              title="Net Profit"
+              value={`$${reportStats.profit.toLocaleString()}`}
+              icon={TrendingUp}
+              hint="Revenue minus expenses"
+            />
+            <Card
+              title="Profit Margin"
+              value={`${reportStats.profitMargin}%`}
+              icon={Landmark}
+              hint="Efficiency ratio"
+            />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Panel title="Revenue vs Expenses (Monthly)">
+              <div ref={revenueChartRef} className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={reportStats.monthlyData}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#94a3b8"
+                      strokeOpacity={0.1}
+                    />
+                    <XAxis dataKey="displayMonth" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar
+                      dataKey="revenue"
+                      fill="#10b981"
+                      radius={[4, 4, 0, 0]}
+                      name="Revenue"
+                    />
+                    <Bar
+                      dataKey="expenses"
+                      fill="#f43f5e"
+                      radius={[4, 4, 0, 0]}
+                      name="Expenses"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+
+            <Panel title="Expense Distribution by Type">
+              <div ref={expenseChartRef} className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={reportStats.expenseDistribution}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                    >
+                      {reportStats.expenseDistribution.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 flex flex-wrap justify-center gap-4">
+                {reportStats.expenseDistribution.map((item, index) => (
+                  <div key={item.name} className="flex items-center gap-2">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <span className="text-xs text-slate-600 dark:text-slate-400">
+                      {item.name} (${item.value.toLocaleString()})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        </>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card
-          title="Total Revenue"
-          value={`$${reportStats.totalRevenue.toLocaleString()}`}
-          icon={DollarSign}
-          hint="Total payments received"
-        />
-        <Card
-          title="Total Expenses"
-          value={`$${reportStats.totalExpenses.toLocaleString()}`}
-          icon={TrendingDown}
-          hint="Operating costs"
-        />
-        <Card
-          title="Net Profit"
-          value={`$${reportStats.profit.toLocaleString()}`}
-          icon={TrendingUp}
-          hint="Revenue minus expenses"
-        />
-        <Card
-          title="Profit Margin"
-          value={`${reportStats.profitMargin}%`}
-          icon={Landmark}
-          hint="Efficiency ratio"
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Panel title="Revenue vs Expenses (Monthly)">
-          <div ref={revenueChartRef} className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={reportStats.monthlyData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#94a3b8"
-                  strokeOpacity={0.1}
-                />
-                <XAxis dataKey="displayMonth" />
-                <YAxis />
-                <Tooltip />
-                <Bar
-                  dataKey="revenue"
-                  fill="#10b981"
-                  radius={[4, 4, 0, 0]}
-                  name="Revenue"
-                />
-                <Bar
-                  dataKey="expenses"
-                  fill="#f43f5e"
-                  radius={[4, 4, 0, 0]}
-                  name="Expenses"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-
-        <Panel title="Expense Distribution by Type">
-          <div ref={expenseChartRef} className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={reportStats.expenseDistribution}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                >
-                  {reportStats.expenseDistribution.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 flex flex-wrap justify-center gap-4">
-            {reportStats.expenseDistribution.map((item, index) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <div
-                  className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                />
-                <span className="text-xs text-slate-600 dark:text-slate-400">
-                  {item.name} (${item.value.toLocaleString()})
-                </span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
+      {/* Payroll Tab */}
+      {activeTab === "payroll" && <PayrollGenerator />}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   CreditCard,
   ShoppingCart,
   CalendarDays,
+  DollarSign,
 } from "lucide-react";
 
 export const modulesByRole = {
@@ -63,6 +64,11 @@ export const modulesByRole = {
     { key: "salary_grades", label: "Salary Grades", icon: Wallet },
     { key: "contracts", label: "Contracts", icon: ReceiptText },
     { key: "payroll_calendar", label: "Payroll Calendar", icon: CalendarDays },
+    {
+      key: "payroll_management",
+      label: "Payroll Management",
+      icon: DollarSign,
+    },
   ],
 };
 

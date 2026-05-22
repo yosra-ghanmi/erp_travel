@@ -54,6 +54,7 @@ from financial_automation_service import FinancialAutomationService
 from payroll_service import PayrollService
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
+from payroll_endpoints import router as payroll_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,6 +91,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include payroll router
+app.include_router(payroll_router)
 
 @app.exception_handler(AgencySECURITYError)
 async def agency_security_exception_handler(request: Request, exc: AgencySECURITYError):

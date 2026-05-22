@@ -36,6 +36,7 @@ import { HRDashboardPage } from "./modules/HRDashboardPage";
 import { SalaryGradesPage } from "./modules/SalaryGradesPage";
 import { ContractsPage } from "./modules/ContractsPage";
 import { PayrollCalendarPage } from "./modules/PayrollCalendarPage";
+import { PayrollGenerator } from "./modules/PayrollGenerator";
 import { tFor, getDir } from "./i18n";
 import {
   fetchBookings,
@@ -694,6 +695,9 @@ function AppWorkspace() {
           searchQuery={searchQuery}
         />
       );
+    }
+    if (resolvedModuleKey === "payroll_management") {
+      return <PayrollGenerator />;
     }
     if (
       resolvedModuleKey === "agency_dashboard" ||

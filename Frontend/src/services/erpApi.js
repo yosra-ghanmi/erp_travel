@@ -350,6 +350,52 @@ export const fetchPlatformOverview = async () => {
   return data;
 };
 
+// Payroll
+export const generateMonthlyPayroll = async (payrollMonth) => {
+  const { data } = await api.post("/api/payroll/generate", { payrollMonth });
+  return data;
+};
+
+export const fetchPayrollEntries = async (
+  payrollMonth,
+  page = 1,
+  pageSize = 10
+) => {
+  const { data } = await api.get("/api/payroll/entries", {
+    params: { payrollMonth, page, pageSize },
+  });
+  return data;
+};
+
+export const fetchPayrollSummary = async (payrollMonth) => {
+  const { data } = await api.get("/api/payroll/summary", {
+    params: { payrollMonth },
+  });
+  return data;
+};
+
+export const approvePayrollEntry = async (entryNo) => {
+  const { data } = await api.patch(`/api/payroll/entries/${entryNo}/approve`);
+  return data;
+};
+
+export const postPayroll = async (payrollMonth) => {
+  const { data } = await api.post("/api/payroll/post", { payrollMonth });
+  return data;
+};
+
+export const fetchCommissions = async (employeeNo, month) => {
+  const { data } = await api.get("/api/commissions", {
+    params: { employeeNo, month },
+  });
+  return data;
+};
+
+export const createCommission = async (commissionData) => {
+  const { data } = await api.post("/api/commissions", commissionData);
+  return data;
+};
+
 // Mailing
 export const sendEmail = async (emailData) => {
   const { data } = await api.post("/api/send-email", emailData);
