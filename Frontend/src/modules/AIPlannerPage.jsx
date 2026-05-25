@@ -499,6 +499,7 @@ export function AIPlannerPage({ clients }) {
             onChange={(event) =>
               setForm((prev) => ({ ...prev, destination: event.target.value }))
             }
+            className="dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
             placeholder="Destination"
           />
           <Input
@@ -510,6 +511,7 @@ export function AIPlannerPage({ clients }) {
                 dailyBudget: Number(event.target.value),
               }))
             }
+            className="dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
             placeholder="Daily Budget"
           />
           <div className="grid gap-3 md:grid-cols-2">
@@ -523,6 +525,7 @@ export function AIPlannerPage({ clients }) {
                   numberOfNights: Number(event.target.value),
                 }))
               }
+              className="dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
               placeholder="Number of Nights"
             />
             <Input
@@ -535,6 +538,7 @@ export function AIPlannerPage({ clients }) {
                   numberOfPersons: Number(event.target.value),
                 }))
               }
+              className="dark:bg-gray-700/50 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
               placeholder="Number of Persons"
             />
           </div>
@@ -589,13 +593,13 @@ export function AIPlannerPage({ clients }) {
             <option value="culture">Culture</option>
           </Select>
           <div className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800">
-            <p>
+            <p className="dark:text-gray-300">
               Daily budget: <strong>{formatCurrency(form.dailyBudget)}</strong>
             </p>
-            <p>
+            <p className="dark:text-gray-300">
               Nights: <strong>{form.numberOfNights}</strong>
             </p>
-            <p>
+            <p className="dark:text-gray-300">
               Total budget: <strong>{formatCurrency(totalBudget)}</strong>
             </p>
           </div>
@@ -631,16 +635,16 @@ export function AIPlannerPage({ clients }) {
 
       <Panel title="Generated Itinerary">
         {!itinerary ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-gray-500 dark:text-slate-400">
             Generate a plan to preview the AI itinerary and plotted route.
           </p>
         ) : (
           <div className="space-y-3 text-sm">
-            <div className="rounded-xl bg-slate-100 p-3 dark:bg-slate-800">
-              <p className="font-medium text-slate-800 dark:text-slate-800">
+            <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-900/50">
+              <p className="font-bold text-gray-900 dark:text-gray-100">
                 {itinerary.summary}
               </p>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
                 Matched services: {itinerary.planningContext?.matchedServices} |
                 Persons: {itinerary.planningContext?.numberOfPersons} | Daily
                 budget {formatCurrency(itinerary.planningContext?.dailyBudget)}{" "}
@@ -648,31 +652,31 @@ export function AIPlannerPage({ clients }) {
                 {formatCurrency(itinerary.planningContext?.totalBudget)}
               </p>
               {itinerary.planningContext?.allIncluded ? (
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                   All-inclusive transport + guide is included in this plan.
                 </p>
               ) : null}
             </div>
             <div>
-              <p className="mb-2 font-medium">Highlights</p>
-              <ul className="space-y-1 text-xs">
+              <p className="mb-2 font-bold text-gray-900 dark:text-gray-100">Highlights</p>
+              <ul className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
                 {(itinerary.attractions || []).map((item) => (
                   <li key={item}>• {item}</li>
                 ))}
               </ul>
             </div>
             <div>
-              <p className="mb-2 font-medium">Daily Plan</p>
-              <div className="max-h-56 space-y-2 overflow-auto">
+              <p className="mb-2 font-bold text-gray-900 dark:text-gray-100">Daily Plan</p>
+              <div className="max-h-56 space-y-2 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {(itinerary.days || []).map((day) => (
                   <div
                     key={day.day}
-                    className="rounded-lg border border-slate-200 p-2 dark:border-slate-700"
+                    className="rounded-lg border border-gray-100 p-2 dark:border-slate-700"
                   >
-                    <p className="font-medium">
+                    <p className="font-bold text-gray-900 dark:text-gray-100">
                       Day {day.day} {day.theme ? `- ${day.theme}` : ""}
                     </p>
-                    <ul className="mt-1 space-y-1 text-xs">
+                    <ul className="mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-300">
                       {(day.items || []).map((item) => (
                         <li key={`${day.day}-${item.title}-${item.time || ""}`}>
                           • {item.time ? `${item.time} ` : ""}
@@ -686,13 +690,13 @@ export function AIPlannerPage({ clients }) {
               </div>
             </div>
             <div>
-              <p className="mb-2 font-medium">Cost Breakdown</p>
-              <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                <div className="space-y-1 text-xs">
+              <p className="mb-2 font-bold text-gray-900 dark:text-gray-100">Cost Breakdown</p>
+              <div className="rounded-lg border border-gray-100 p-3 dark:border-slate-700">
+                <div className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
                   {(matchedServices || []).map((service) => (
                     <div key={service.id} className="flex justify-between">
                       <span>{service.name}</span>
-                      <span className="font-medium">
+                      <span className="font-bold">
                         {formatCurrency(
                           estimateServiceCost(
                             service,
@@ -706,7 +710,7 @@ export function AIPlannerPage({ clients }) {
                   {form.allIncluded ? (
                     <div className="flex justify-between text-sm">
                       <span>Transport + Guide</span>
-                      <span className="font-medium">
+                      <span className="font-bold">
                         {formatCurrency(
                           ALL_INCLUDED_RATE *
                             Math.max(Number(form.numberOfPersons || 1), 1) *
@@ -715,8 +719,8 @@ export function AIPlannerPage({ clients }) {
                       </span>
                     </div>
                   ) : null}
-                  <div className="mt-2 border-t border-slate-300 pt-2 dark:border-slate-600">
-                    <div className="flex justify-between font-semibold">
+                  <div className="mt-2 border-t border-gray-100 pt-2 dark:border-slate-700">
+                    <div className="flex justify-between font-bold text-gray-900 dark:text-gray-100">
                       <span>Total Estimated Cost</span>
                       <span className="text-emerald-600 dark:text-emerald-400">
                         {formatCurrency(

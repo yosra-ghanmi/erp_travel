@@ -2,9 +2,11 @@ import { useMemo, useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import logo from "../assets/logo.png";
+import { FileText, Mail, Trash2 } from "lucide-react";
 import {
   Button,
   DataTable,
+  IconButton,
   Input,
   Panel,
   Select,
@@ -394,30 +396,37 @@ export function PaymentsPage({ searchQuery }) {
                 "Status",
                 "Actions",
               ]}
-              rows={filteredInvoices.map((inv) => {
+              rows={filteredInvoices.map((inv, idx) => {
                 const iNo = inv.invoiceNo;
                 return (
                   <tr
                     key={iNo}
-                    className="border-b border-slate-100 dark:border-slate-800"
+                    className={`border-b border-gray-100 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50 ${
+                      idx % 2 === 0 ? "bg-white dark:bg-slate-800" : "bg-gray-50/50 dark:bg-slate-800/50"
+                    }`}
                   >
-                    <td className="px-2 py-3 text-xs font-mono text-slate-600 dark:text-slate-400">
-                      {iNo}
+                    <td className="px-2 py-3">
+                      <p className="font-bold text-gray-900 dark:text-gray-100">{iNo}</p>
+                      <p className="text-[10px] text-gray-400">{inv.invoiceDate}</p>
                     </td>
-                    <td className="px-2 py-3 text-slate-700 dark:text-slate-300">
-                      {inv.clientName ||
-                        clients.find((c) => (c.no || c.id) === inv.clientNo)
-                          ?.name ||
-                        inv.clientNo}
+                    <td className="px-2 py-3">
+                      <p className="font-bold text-gray-900 dark:text-gray-100">
+                        {inv.clientName ||
+                          clients.find((c) => (c.no || c.id) === inv.clientNo)
+                            ?.name ||
+                          inv.clientNo}
+                      </p>
                     </td>
-                    <td className="px-2 py-3 font-bold text-slate-900 dark:text-slate-200">
-                      ${inv.totalAmount || 0}
+                    <td className="px-2 py-3">
+                      <p className="font-bold text-gray-900 dark:text-gray-100">
+                        ${inv.totalAmount || 0}
+                      </p>
                     </td>
-                    <td className="px-2 py-3 text-emerald-600">
-                      ${inv.amountPaid || 0}
+                    <td className="px-2 py-3">
+                      <p className="font-bold text-emerald-600">${inv.amountPaid || 0}</p>
                     </td>
-                    <td className="px-2 py-3 text-rose-600">
-                      ${inv.balanceDue || 0}
+                    <td className="px-2 py-3">
+                      <p className="font-bold text-rose-600">${inv.balanceDue || 0}</p>
                     </td>
                     <td className="px-2 py-3">
                       <StatusBadge
@@ -426,31 +435,22 @@ export function PaymentsPage({ searchQuery }) {
                     </td>
                     <td className="px-2 py-3">
                       <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        <IconButton
+                          icon={FileText}
                           onClick={() => downloadInvoicePDF(inv)}
                           title="Download PDF"
-                        >
-                          PDF
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        />
+                        <IconButton
+                          icon={Mail}
                           onClick={() => sendInvoiceEmail(inv)}
                           title="Send by Email"
-                        >
-                          Mail
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        />
+                        <IconButton
+                          icon={Trash2}
+                          variant="danger"
                           onClick={() => handleDeleteInvoice(inv.invoiceNo)}
                           title="Delete Invoice"
-                          className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          Del
-                        </Button>
+                        />
                       </div>
                     </td>
                   </tr>
@@ -470,7 +470,7 @@ export function PaymentsPage({ searchQuery }) {
                 {message}
               </div>
             )}
-            <label className="text-[10px] uppercase font-bold text-slate-400">
+            <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
               Select Invoice
             </label>
             <Select
@@ -494,7 +494,7 @@ export function PaymentsPage({ searchQuery }) {
                 ))}
             </Select>
 
-            <label className="text-[10px] uppercase font-bold text-slate-400">
+            <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
               Amount to Pay
             </label>
             <Input
@@ -506,7 +506,7 @@ export function PaymentsPage({ searchQuery }) {
               placeholder="Amount Paid"
             />
 
-            <label className="text-[10px] uppercase font-bold text-slate-400">
+            <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
               Payment Method
             </label>
             <Select
@@ -520,7 +520,7 @@ export function PaymentsPage({ searchQuery }) {
               <option value="transfer">Bank Transfer</option>
             </Select>
 
-            <label className="text-[10px] uppercase font-bold text-slate-400">
+            <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
               Payment Date
             </label>
             <Input
@@ -547,39 +547,42 @@ export function PaymentsPage({ searchQuery }) {
         <DataTable
           headers={[
             "Payment ID",
-            "Invoice No.",
-            "Method",
+            "Invoice No",
             "Amount",
+            "Method",
             "Date",
-            "Actions",
+            "Action",
           ]}
-          rows={payments.map((payment) => {
-            const pId = payment.paymentid || payment.paymentId || payment.id;
-            const iNo = payment.invoiceno || payment.invoiceNo;
+          rows={payments.map((p, idx) => {
+            const pId = p.paymentid || p.paymentId || p.id;
+            const iNo = p.invoiceno || p.invoiceNo;
             return (
               <tr
                 key={pId}
-                className="border-b border-slate-100 dark:border-slate-800"
+                className={`border-b border-gray-100 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50 ${
+                  idx % 2 === 0 ? "bg-white dark:bg-slate-800" : "bg-gray-50/50 dark:bg-slate-800/50"
+                }`}
               >
-                <td className="px-2 py-3 text-xs font-mono">{pId}</td>
-                <td className="px-2 py-3 text-xs font-mono">{iNo}</td>
-                <td className="px-2 py-3 text-xs uppercase">
-                  {payment.method}
+                <td className="px-2 py-3 text-xs font-bold text-gray-900 dark:text-gray-100">
+                  {pId}
+                </td>
+                <td className="px-2 py-3 text-gray-600 dark:text-gray-300">
+                  {iNo}
                 </td>
                 <td className="px-2 py-3 font-bold text-emerald-600">
-                  ${payment.amount}
+                  ${p.amount}
                 </td>
-                <td className="px-2 py-3 text-xs">{payment.date}</td>
+                <td className="px-2 py-3 text-gray-600 dark:text-gray-300">
+                  <span className="capitalize">{p.method}</span>
+                </td>
+                <td className="px-2 py-3 text-gray-500 dark:text-gray-400">{p.date}</td>
                 <td className="px-2 py-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <IconButton
+                    icon={Trash2}
+                    variant="danger"
                     onClick={() => handleDeletePayment(pId)}
                     title="Delete Payment"
-                    className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                  >
-                    Delete
-                  </Button>
+                  />
                 </td>
               </tr>
             );

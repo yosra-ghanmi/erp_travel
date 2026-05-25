@@ -8,8 +8,10 @@ import {
   Search,
   UserRound,
   X,
+  Sparkles,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { tFor, getDir } from "../i18n";
 import logo from "../assets/logo.png";
 
@@ -63,220 +65,282 @@ export function Layout({
   }, []);
 
   return (
-    <div className={`${darkMode ? "dark" : ""}`} dir={getDir(language)}>
-      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-        <aside className="hidden w-64 border-r border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col">
-          <div>
+    <div className={darkMode ? "dark" : ""} dir={getDir(language)}>
+      <div className="flex min-h-screen bg-gray-50 font-['Inter'] transition-colors duration-500 dark:bg-gray-900">
+        {/* Sidebar */}
+        <aside className="hidden w-72 border-r border-gray-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col">
+          <div className="flex-1">
             <Link
               to={homePath}
-              className="mb-8 flex w-full items-center gap-3 rounded-xl px-2 py-2"
+              className="group mb-10 flex items-center gap-3 rounded-2xl px-2 transition-all"
             >
-              <div className="flex h-12 w-12 items-center justify-center overflow-visible">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 shadow-sm dark:bg-slate-800 transition-transform group-hover:scale-110">
                 <img
                   src={logo}
-                  alt="Navigo logo"
-                  className="h-10 w-auto max-w-[42px] shrink-0 object-contain"
+                  alt="Logo"
+                  className="h-8 w-8 object-contain"
                 />
               </div>
-              <span className="text-xl font-bold tracking-[-0.01em] text-slate-900 dark:text-white">
-                Navigo
-              </span>
+              <div className="flex flex-col">
+                <span className="text-lg font-black tracking-tight text-gray-900 dark:text-white">
+                  NAVIGO
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-blue-600 dark:text-brand-400">
+                  ERP Systems
+                </span>
+              </div>
             </Link>
-            {agencyName ? (
-              <p className="text-xs text-slate-500 dark:text-slate-300">
-                {agencyName}
-              </p>
-            ) : null}
-            <nav className="space-y-2">
-              {modules.map((module) => (
-                <button
-                  key={module.key}
-                  onClick={() => onNavigate(module.key)}
-                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
-                    activeModule === module.key
-                      ? "bg-cyan-100 text-cyan-800 dark:bg-blue-900/40 dark:text-cyan-200"
-                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                  }`}
-                >
-                  <module.icon className="h-4 w-4" />
-                  {t(`modules.${module.key}`) ?? module.label}
-                </button>
-              ))}
+
+            <nav className="space-y-1.5">
+              {modules.map((module) => {
+                const isActive = activeModule === module.key;
+                return (
+                  <button
+                    key={module.key}
+                    onClick={() => onNavigate(module.key)}
+                    className={`group relative flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold tracking-tight transition-all duration-300 ${
+                      isActive
+                        ? "bg-blue-50 text-blue-600 dark:bg-brand-500/10 dark:text-brand-400"
+                        : "text-gray-500 hover:bg-gray-50 dark:text-slate-400 dark:hover:bg-slate-800/50"
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="active-pill"
+                        className="absolute left-0 h-6 w-1 rounded-full bg-brand-600 dark:bg-brand-500"
+                        transition={{
+                          type: "spring",
+                          stiffness: 300,
+                          damping: 30,
+                        }}
+                      />
+                    )}
+                    <module.icon
+                      className={`h-5 w-5 transition-transform duration-300 group-hover:scale-110 ${
+                        isActive ? "text-brand-600 dark:text-brand-400" : ""
+                      }`}
+                    />
+                    {t(`modules.${module.key}`) ?? module.label}
+                  </button>
+                );
+              })}
             </nav>
           </div>
-          {role === "superadmin" ? (
-            <p className="text-xs text-slate-500 dark:text-slate-300">
-              {t("account.powered_by")}
-            </p>
-          ) : null}
+
+          <div className="mt-auto space-y-4">
+            {agencyName && (
+              <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  Current Agency
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                  {agencyName}
+                </p>
+              </div>
+            )}
+            <div className="flex items-center gap-2 px-2 text-[10px] font-medium text-slate-400">
+              <Sparkles className="h-3 w-3 text-brand-500" />
+              <span>Powered by Navigo AI</span>
+            </div>
+          </div>
         </aside>
 
-        <main className="flex-1 bg-gradient-to-b from-slate-50 to-white p-4 dark:from-slate-950 dark:to-slate-950 lg:p-8">
-          <header className="mb-8 border-b border-slate-100 pb-4 dark:border-slate-800">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-[200px]">
-                <h2 className="text-lg font-semibold tracking-[-0.01em] text-slate-900 dark:text-white">
+        {/* Main Content */}
+        <main className="flex-1 overflow-x-hidden p-4 lg:p-10">
+          <header className="mb-10">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-3xl font-black tracking-tight text-gray-900 dark:text-white">
                   {pageTitle}
                 </h2>
+                <p className="text-sm font-medium text-gray-500 dark:text-slate-400">
+                  Welcome back to your workspace.
+                </p>
               </div>
-              <div className="w-full max-w-xl flex-1">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+              <div className="flex flex-1 items-center justify-end gap-4">
+                <div className="relative w-full max-w-md">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     placeholder={t("header.search_placeholder")}
                     value={searchQuery || ""}
                     onChange={(e) => onSearchChange?.(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white/70 py-2 pl-9 pr-10 text-sm text-slate-700 outline-none transition focus:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-10 py-3 text-sm font-medium text-gray-700 outline-none ring-blue-500/10 transition-all focus:border-blue-500 focus:ring-1 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => onSearchChange?.("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3 w-3" />
                     </button>
                   )}
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div ref={languageRef} className="relative">
-                  <button
-                    onClick={() => setIsLanguageOpen((prev) => !prev)}
-                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                    aria-label="Toggle language"
-                  >
-                    <Globe2 className="h-4 w-4" />
-                  </button>
-                  {isLanguageOpen ? (
-                    <div className="absolute right-0 z-20 mt-2 w-24 rounded-xl border border-slate-200 bg-white p-1 shadow-soft dark:border-slate-700 dark:bg-slate-900">
-                      {languageOptions.map((item) => (
-                        <button
-                          key={item.value}
-                          onClick={() => {
-                            onLanguageChange(item.value);
-                            setIsLanguageOpen(false);
-                          }}
-                          className={`w-full rounded-lg px-2 py-1 text-left text-xs transition ${
-                            language === item.value
-                              ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white"
-                              : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                          }`}
+
+                <div className="flex items-center gap-2">
+                  <div ref={languageRef} className="relative">
+                    <button
+                      onClick={() => setIsLanguageOpen((prev) => !prev)}
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition-all hover:bg-slate-50 hover:shadow-soft dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      <Globe2 className="h-5 w-5" />
+                    </button>
+                    <AnimatePresence>
+                      {isLanguageOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 z-30 mt-3 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-premium dark:border-slate-800 dark:bg-slate-900"
                         >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  onClick={onToggleDarkMode}
-                  className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                  aria-label="Toggle theme"
-                >
-                  <MoonStar className="h-4 w-4" />
-                </button>
-                <div ref={notificationsRef} className="relative">
-                  <button
-                    onClick={() => setIsNotificationsOpen((prev) => !prev)}
-                    className="relative rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                    aria-label="Notifications"
-                  >
-                    <Bell className="h-4 w-4" />
-                    {notifications.filter((n) => !n.read).length > 0 && (
-                      <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 text-[10px] text-white">
-                        {notifications.filter((n) => !n.read).length}
-                      </span>
-                    )}
-                  </button>
-                  {isNotificationsOpen ? (
-                    <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-slate-900">
-                      {notifications.length > 0 ? (
-                        notifications.map((item, idx) => (
-                          <div
-                            key={item.id || idx}
-                            onMouseEnter={() =>
-                              !item.read && onMarkNotificationAsRead?.(item.id)
-                            }
-                            className={`group mb-2 cursor-pointer rounded-xl border p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 last:mb-0 ${
-                              item.read
-                                ? "border-slate-100 bg-white opacity-60 dark:border-slate-800 dark:bg-slate-900"
-                                : "border-slate-200 bg-slate-50 hover:border-cyan-300 hover:bg-white hover:shadow-md dark:border-slate-700 dark:bg-slate-800/70 dark:hover:border-cyan-500/60 dark:hover:bg-slate-800"
-                            }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              {!item.read && (
-                                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-cyan-500 transition-transform duration-200 group-hover:scale-110" />
-                              )}
-                              <div className="min-w-0">
-                                <p
-                                  className={`text-xs font-medium transition-colors ${
-                                    item.read
-                                      ? "text-slate-400 dark:text-slate-500"
-                                      : "text-slate-800 dark:text-slate-100"
-                                  }`}
-                                >
-                                  {item.read ? "Read" : "New Notification"}
-                                </p>
-                                <p
-                                  className={`mt-1 text-xs leading-5 transition-colors ${
-                                    item.read
-                                      ? "text-slate-400 dark:text-slate-500"
-                                      : "text-slate-600 dark:text-slate-300"
-                                  }`}
-                                >
-                                  {item.message || item}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400">
-                          No new notifications
-                        </div>
+                          {languageOptions.map((item) => (
+                            <button
+                              key={item.value}
+                              onClick={() => {
+                                onLanguageChange(item.value);
+                                setIsLanguageOpen(false);
+                              }}
+                              className={`w-full rounded-xl px-3 py-2 text-left text-xs font-bold transition-all ${
+                                language === item.value
+                                  ? "bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
+                                  : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </motion.div>
                       )}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="relative">
+                    </AnimatePresence>
+                  </div>
+
                   <button
-                    onClick={() => setOpenProfileMenu((prev) => !prev)}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                    onClick={onToggleDarkMode}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 transition-all hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
-                    <UserRound className="h-4 w-4 text-slate-500 dark:text-slate-200" />
-                    <div className="text-left">
-                      <p className="max-w-[130px] truncate text-xs text-slate-600 dark:text-slate-200">
-                        {sessionEmail}
-                      </p>
-                      <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-300">
-                        {t("account.account")}
-                      </p>
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-slate-500 dark:text-slate-200" />
+                    <MoonStar className="h-5 w-5" />
                   </button>
-                  {openProfileMenu ? (
-                    <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-slate-900">
-                      <p className="rounded-lg px-2 py-2 text-xs text-slate-500 dark:text-slate-300">
-                        {sessionEmail}
-                      </p>
-                      <p className="rounded-lg px-2 pb-2 text-xs font-medium uppercase text-cyan-700 dark:text-cyan-400">
-                        {role.replace("_", " ")}
-                      </p>
-                      <button
-                        onClick={onLogout}
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        {t("account.sign_out")}
-                      </button>
-                    </div>
-                  ) : null}
+
+                  <div ref={notificationsRef} className="relative">
+                    <button
+                      onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                      className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 transition-all hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      <Bell className="h-5 w-5" />
+                      {notifications.filter((n) => !n.read).length > 0 && (
+                        <span className="absolute right-2.5 top-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-lg shadow-rose-500/30">
+                          {notifications.filter((n) => !n.read).length}
+                        </span>
+                      )}
+                    </button>
+                    <AnimatePresence>
+                      {isNotificationsOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 z-30 mt-3 w-80 overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-900"
+                        >
+                          <div className="p-4">
+                            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                              Notifications
+                            </h4>
+                          </div>
+                          <div className="max-h-[400px] overflow-y-auto p-2 [scrollbar-width:none] [\&::-webkit-scrollbar]:hidden">
+                            {notifications.length > 0 ? (
+                              notifications.map((item, idx) => (
+                                <div
+                                  key={item.id || idx}
+                                  className={`mb-2 flex items-start gap-4 rounded-xl border p-4 transition-all ${
+                                    item.read
+                                      ? "border-transparent bg-gray-50 dark:bg-slate-800/30"
+                                      : "border-blue-100 bg-blue-50/50 dark:border-brand-900/30 dark:bg-brand-900/10"
+                                  }`}
+                                >
+                                  <div className="flex-1">
+                                    <p
+                                      className={`text-xs font-bold ${
+                                        item.read
+                                          ? "text-gray-500 dark:text-slate-400"
+                                          : "text-gray-900 dark:text-white"
+                                      }`}
+                                    >
+                                      {item.message}
+                                    </p>
+                                    <p className="mt-1 text-[10px] font-medium text-gray-400">
+                                      2 hours ago
+                                    </p>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="py-8 text-center text-xs font-medium text-gray-400">
+                                All caught up!
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenProfileMenu((prev) => !prev)}
+                      className="group flex h-11 items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 transition-all hover:bg-gray-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
+                    >
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-brand-900/40 dark:text-brand-400">
+                        <UserRound className="h-4 w-4" />
+                      </div>
+                      <div className="hidden text-left xl:block">
+                        <p className="max-w-[100px] truncate text-xs font-bold text-gray-900 dark:text-white">
+                          {sessionEmail?.split("@")[0]}
+                        </p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          {role}
+                        </p>
+                      </div>
+                      <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${openProfileMenu ? "rotate-180" : ""}`} />
+                    </button>
+                    <AnimatePresence>
+                      {openProfileMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 z-30 mt-3 w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-800 dark:bg-slate-900"
+                        >
+                          <div className="border-b border-gray-100 p-3 dark:border-slate-800">
+                            <p className="text-xs font-bold text-gray-900 dark:text-white">
+                              {sessionEmail}
+                            </p>
+                          </div>
+                          <div className="p-1">
+                            <button
+                              onClick={onLogout}
+                              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold text-rose-600 transition-all hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                            >
+                              <LogOut className="h-4 w-4" />
+                              Sign Out
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             </div>
           </header>
-          {children}
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
     </div>

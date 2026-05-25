@@ -1,5 +1,5 @@
+import datetime
 from enum import Enum
-from datetime import date
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -26,8 +26,8 @@ class Booking(BaseModel):
     bookingId: str
     clientNo: str
     tripName: str
-    startDate: date
-    endDate: date
+    startDate: datetime.date
+    endDate: datetime.date
     amount: float
     notes: Optional[str] = None
     booking_category: Optional[str] = Field(None, alias="bookingCategory")
@@ -41,8 +41,8 @@ class Booking(BaseModel):
 class BookingCreate(BaseModel):
     clientNo: str
     tripName: str
-    startDate: date
-    endDate: date
+    startDate: datetime.date
+    endDate: datetime.date
     amount: float
     notes: Optional[str] = None
     booking_category: Optional[str] = Field(None, alias="bookingCategory")
@@ -59,7 +59,7 @@ class Payment(BaseModel):
     bookingId: str
     amount: float
     method: str  # cash, card, transfer
-    payment_date: date = Field(..., alias="date")
+    payment_date: datetime.date = Field(..., alias="date")
 
 
 class PaymentCreate(BaseModel):
@@ -67,7 +67,7 @@ class PaymentCreate(BaseModel):
     bookingId: str
     amount: float
     method: str
-    payment_date: date = Field(..., alias="date")
+    payment_date: datetime.date = Field(..., alias="date")
 
 
 class ExpenseType(str, Enum):
@@ -89,7 +89,7 @@ class Expense(BaseModel):
     recipient_id: Optional[str] = Field(None, alias="recipientId", description="Agent or Hotel/Provider ID")
     expense_type: ExpenseType = Field(..., alias="expenseType")
     amount: float
-    expense_date: date = Field(default_factory=date.today, alias="date")
+    expense_date: datetime.date = Field(default_factory=datetime.date.today, alias="date")
     description: Optional[str] = None
     status: str = Field("Pending", description="Pending, Synchronized, Failed")
     document_reference: Optional[str] = Field(None, alias="documentReference")
@@ -110,7 +110,7 @@ class ExpenseCreate(BaseModel):
     expense_type: ExpenseType = Field(..., alias="expenseType")
     amount: float
     date: Optional[str] = Field(None)
-    expense_date: Optional[date] = Field(None, alias="expenseDate")
+    expense_date: Optional[datetime.date] = Field(None, alias="expenseDate")
     description: Optional[str] = None
     document_reference: Optional[str] = Field(None, alias="documentReference")
     ledger_account_no: Optional[str] = Field(None, alias="ledgerAccountNo")
@@ -146,7 +146,7 @@ class Reservation(BaseModel):
     reservation_no: Optional[str] = Field(None, alias="reservationNo", description="Reservation number")
     client_no: str = Field(..., alias="clientNo", description="Client No.")
     service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
-    reservation_date: Optional[date] = Field(None, alias="reservationDate", description="Reservation date")
+    reservation_date: Optional[datetime.date] = Field(None, alias="reservationDate", description="Reservation date")
     status: Optional[str] = Field(None, description="Reservation status")
 
     class Config:
@@ -239,8 +239,8 @@ class TravelQuote(BaseModel):
     number_of_nights: Optional[float] = Field(None, alias="numberOfNights", description="Number of nights (for hotels)")
     client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
     client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
-    quote_date: Optional[date] = Field(None, alias="quoteDate", description="Quote date")
-    valid_until_date: Optional[date] = Field(None, alias="validUntilDate", description="Valid until date")
+    quote_date: Optional[datetime.date] = Field(None, alias="quoteDate", description="Quote date")
+    valid_until_date: Optional[datetime.date] = Field(None, alias="validUntilDate", description="Valid until date")
     status: Optional[str] = Field(None, description="Status (Draft, Sent, Accepted, Rejected, Expired)")
     subtotal: Optional[float] = Field(None, description="Subtotal")
     discount_percent: Optional[float] = Field(None, alias="discount_percent", description="Discount percentage")
@@ -262,8 +262,8 @@ class TravelInvoice(BaseModel):
     service_code: Optional[str] = Field(None, alias="serviceCode", description="Service code")
     client_no: Optional[str] = Field(None, alias="clientNo", description="Client number")
     client_name: Optional[str] = Field(None, alias="clientName", description="Client name")
-    invoice_date: Optional[date] = Field(None, alias="invoiceDate", description="Invoice date")
-    due_date: Optional[date] = Field(None, alias="dueDate", description="Due date")
+    invoice_date: Optional[datetime.date] = Field(None, alias="invoiceDate", description="Invoice date")
+    due_date: Optional[datetime.date] = Field(None, alias="dueDate", description="Due date")
     status: Optional[str] = Field(None, description="Status (Open, Partial, Paid, Overdue)")
     total_amount: Optional[float] = Field(None, alias="totalAmount", description="Total amount")
     amount_paid: Optional[float] = Field(None, alias="amountPaid", description="Amount paid")
@@ -300,7 +300,7 @@ class TravelPayment(BaseModel):
     invoice_no: Optional[str] = Field(None, alias="invoiceNo", description="Invoice number")
     amount: float = Field(..., description="Payment amount")
     method: str = Field(..., description="Payment method")
-    payment_date: date = Field(..., alias="date", description="Payment date")
+    payment_date: datetime.date = Field(..., alias="date", description="Payment date")
 
     class Config:
         populate_by_name = True
@@ -314,8 +314,8 @@ class TravelOffer(BaseModel):
     duration_days: Optional[int] = Field(None, alias="durationDays", description="Duration in days")
     price: Optional[float] = Field(None, description="Base price")
     currency: Optional[str] = Field(None, alias="currencyCode", description="Currency code")
-    start_date: Optional[date] = Field(None, alias="startDate", description="Start date")
-    end_date: Optional[date] = Field(None, alias="endDate", description="End date")
+    start_date: Optional[datetime.date] = Field(None, alias="startDate", description="Start date")
+    end_date: Optional[datetime.date] = Field(None, alias="endDate", description="End date")
     highlights: List[str] = Field(default_factory=list, description="Key highlights")
 
     class Config:
@@ -354,7 +354,7 @@ class SalaryExpense(BaseModel):
     role: str
     amount: float
     currency: str = "DT"
-    payment_date: date = Field(..., alias="paymentDate")
+    payment_date: datetime.date = Field(..., alias="paymentDate")
     month_year: str = Field(..., alias="monthYear")  # Format: "MM-YYYY"
 
     class Config:

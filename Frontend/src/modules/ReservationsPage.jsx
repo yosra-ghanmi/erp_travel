@@ -2,11 +2,13 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Button,
   DataTable,
+  IconButton,
   Input,
   Panel,
   Select,
   StatusBadge,
 } from "../components/ui";
+import { Trash2 } from "lucide-react";
 import {
   fetchReservations,
   fetchClients,
@@ -225,14 +227,13 @@ export function BookingsPage({
                 </td>
                 <td className="px-2 py-3">
                   {type === "Trip" && (
-                    <Button
+                    <IconButton
+                      icon={Trash2}
                       variant="danger"
-                      size="small"
                       onClick={() => handleDeleteBooking(res)}
                       disabled={loading}
-                    >
-                      Delete
-                    </Button>
+                      title="Delete Trip"
+                    />
                   )}
                 </td>
               </tr>

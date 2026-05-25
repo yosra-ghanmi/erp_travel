@@ -124,18 +124,18 @@ export function DashboardPage({
               filteredActivity.map((activity) => (
                 <div
                   key={activity.id}
-                  className="rounded-xl bg-slate-100 p-3 text-sm dark:bg-slate-800"
+                  className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-slate-800/50"
                 >
-                  <p className="font-medium text-slate-700 dark:text-slate-200">
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
                     {activity.message}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {activity.at}
                   </p>
                 </div>
               ))
             ) : (
-              <p className="py-4 text-center text-xs text-slate-500">
+              <p className="py-4 text-center text-xs text-gray-500">
                 No matching activities found.
               </p>
             )}

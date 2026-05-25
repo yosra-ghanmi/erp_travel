@@ -30,9 +30,6 @@ export function PayrollCalendarPage({ users = [], searchQuery }) {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-          Payroll Calendar
-        </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Plans monthly payroll runs using the fixed DT amounts for admin,
           agent, finance, and HR roles.

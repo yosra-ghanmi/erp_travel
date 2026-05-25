@@ -75,9 +75,7 @@ export function HRDashboardPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-          HR Overview
-        </h2>
+        <div></div>
         <div className="flex gap-2">
           <Button
             variant="ghost"

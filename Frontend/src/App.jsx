@@ -228,7 +228,9 @@ function AppWorkspace() {
     () =>
       localStorage.getItem("lang") ?? sessionUser?.preferred_language ?? "en"
   );
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("theme") === "dark" || !localStorage.getItem("theme")
+  );
   const [clients, setClients] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [trips, setTrips] = useState([]);
@@ -296,6 +298,10 @@ function AppWorkspace() {
     document.documentElement.setAttribute("dir", getDir(language));
     document.documentElement.setAttribute("lang", language);
   }, [language, location.pathname, sessionUser?.preferred_language]);
+
+  useEffect(() => {
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   useEffect(() => {
     if (!sessionUser?.id) {

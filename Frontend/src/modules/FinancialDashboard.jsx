@@ -365,9 +365,6 @@ export function FinancialDashboard() {
         <>
           <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
-                Financial Dashboard
-              </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Generate periodic financial reports for superadmin review.
               </p>

@@ -2,12 +2,13 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Button,
   DataTable,
+  IconButton,
   Input,
   Panel,
   Select,
   StatusBadge,
 } from "../components/ui";
-import { Wrench } from "lucide-react";
+import { Wrench, Pencil, Trash2, Hand } from "lucide-react";
 import {
   createReservation,
   createService,
@@ -346,8 +347,8 @@ export function ServicesPage({
                     </div>
                   </div>
                 </td>
-                <td className="px-2 py-3">{service.category}</td>
-                <td className="px-2 py-3">${service.price}</td>
+                <td className="px-2 py-3 dark:text-gray-200">{service.category}</td>
+                <td className="px-2 py-3 dark:text-gray-200">${service.price}</td>
                 <td className="px-2 py-3">
                   <StatusBadge
                     value={service.active ? "active" : "suspended"}
@@ -359,29 +360,28 @@ export function ServicesPage({
                       {role !== "superadmin" &&
                         role !== "admin" &&
                         role !== "agent" && (
-                          <Button
+                          <IconButton
+                            icon={Hand}
                             variant="success"
                             onClick={() => assignService(service.id)}
                             disabled={!selectedClientId}
-                          >
-                            Use
-                          </Button>
+                            title="Use Service"
+                          />
                         )}
                       {canManage ? (
-                        <Button
-                          variant="ghost"
+                        <IconButton
+                          icon={Pencil}
                           onClick={() => startEdit(service)}
-                        >
-                          Edit
-                        </Button>
+                          title="Edit"
+                        />
                       ) : null}
                       {canManage ? (
-                        <Button
+                        <IconButton
+                          icon={Trash2}
                           variant="danger"
                           onClick={() => removeService(service.id)}
-                        >
-                          Delete
-                        </Button>
+                          title="Delete"
+                        />
                       ) : null}
                     </div>
                   </td>

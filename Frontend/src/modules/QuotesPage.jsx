@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import logo from "../assets/logo.png";
+import { FileText, Mail, Trash2, Send, CheckCircle, XCircle, Receipt } from "lucide-react";
 import {
   Button,
   DataTable,
+  IconButton,
   Input,
   Panel,
   Select,
@@ -645,23 +647,25 @@ export function QuotesPage({ agencyId, searchQuery }) {
           )}
           <DataTable
             headers={["No.", "Client", "Amount", "Status", "Actions"]}
-            rows={filteredQuotes.map((quote) => {
+            rows={filteredQuotes.map((quote, idx) => {
               const qNo = quote.quoteNo;
               const status = quote.status || "Draft";
               return (
                 <tr
                   key={qNo}
-                  className="border-b border-slate-100 dark:border-slate-800"
+                  className={`border-b border-gray-100 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50 ${
+                    idx % 2 === 0 ? "bg-white dark:bg-slate-800" : "bg-gray-50/50 dark:bg-slate-800/50"
+                  }`}
                 >
-                  <td className="px-2 py-3 text-xs font-mono text-slate-500 dark:text-slate-400">
+                  <td className="px-2 py-3 text-xs font-bold text-gray-900 dark:text-gray-100">
                     {qNo}
                   </td>
-                  <td className="px-2 py-3 text-slate-700 dark:text-slate-200">
+                  <td className="px-2 py-3 text-gray-700 dark:text-gray-300">
                     {quote.clientName ||
                       clients.find((c) => c.id === quote.clientNo)?.name ||
                       quote.clientNo}
                   </td>
-                  <td className="px-2 py-3 font-bold text-slate-900 dark:text-white">
+                  <td className="px-2 py-3 font-bold text-gray-900 dark:text-white">
                     {quote.totalAmount || 0} {quote.currencyCode || "TND"}
                   </td>
                   <td className="px-2 py-3">
@@ -669,62 +673,52 @@ export function QuotesPage({ agencyId, searchQuery }) {
                   </td>
                   <td className="px-2 py-3">
                     <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <IconButton
+                        icon={FileText}
                         onClick={() => downloadPDF(quote)}
                         title="Download PDF"
-                      >
-                        PDF
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      />
+                      <IconButton
+                        icon={Mail}
                         onClick={() => sendQuoteEmail(quote)}
                         title="Send by Email"
-                      >
-                        Mail
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      />
+                      <IconButton
+                        icon={Trash2}
+                        variant="danger"
                         onClick={() => handleDeleteQuote(quote.quoteNo)}
                         title="Delete Quote"
-                        className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        Del
-                      </Button>
+                      />
                       {status === "Draft" && (
-                        <Button
-                          variant="ghost"
+                        <IconButton
+                          icon={Send}
                           onClick={() => handleStatusChange(qNo, "Sent")}
-                        >
-                          Send
-                        </Button>
+                          title="Send Quote"
+                        />
                       )}
                       {status === "Sent" && (
                         <>
-                          <Button
+                          <IconButton
+                            icon={CheckCircle}
                             variant="success"
                             onClick={() => handleStatusChange(qNo, "Accepted")}
-                          >
-                            Accept
-                          </Button>
-                          <Button
+                            title="Accept Quote"
+                          />
+                          <IconButton
+                            icon={XCircle}
                             variant="danger"
                             onClick={() => handleStatusChange(qNo, "Rejected")}
-                          >
-                            Reject
-                          </Button>
+                            title="Reject Quote"
+                          />
                         </>
                       )}
                       {status === "Accepted" && (
-                        <Button
+                        <IconButton
+                          icon={Receipt}
                           variant="primary"
                           onClick={() => generateInvoice(quote)}
-                        >
-                          To Invoice
-                        </Button>
+                          title="Generate Invoice"
+                        />
                       )}
                     </div>
                   </td>
@@ -736,7 +730,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
       </div>
       <Panel title="Create New Quote">
         <div className="space-y-3">
-          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+          <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
             Client Search
           </label>
           <Input
@@ -765,7 +759,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
               ))}
           </Select>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+          <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
             Line Type
           </label>
           <div className="flex gap-2">
@@ -791,7 +785,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
             </Button>
           </div>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+          <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
             {form.lineType} Search
           </label>
           <Input
@@ -825,13 +819,13 @@ export function QuotesPage({ agencyId, searchQuery }) {
                 </option>
               ))}
           </Select>
-          <p className="text-[9px] text-slate-400 dark:text-slate-300 italic">
+          <p className="text-[9px] text-gray-400 dark:text-slate-400 italic">
             Hold Ctrl/Cmd to select multiple
           </p>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+              <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                 Persons
               </label>
               <Input
@@ -847,7 +841,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+              <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                 Nights
               </label>
               <Input
@@ -864,7 +858,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
             </div>
           </div>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+          <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
             Discount
           </label>
           <Select
@@ -883,7 +877,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
             <option value="15">15% Discount (Max)</option>
           </Select>
 
-          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+          <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
             Quote Date
           </label>
           <Input
@@ -894,7 +888,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
             }
           />
 
-          <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-300">
+          <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
             Valid Until
           </label>
           <Input

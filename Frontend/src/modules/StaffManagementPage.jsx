@@ -1,8 +1,9 @@
-import { Plus, Trash2, Edit2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Button,
   DataTable,
+  IconButton,
   Input,
   Panel,
   Select,
@@ -97,9 +98,7 @@ export function StaffManagementPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-          Staff Management
-        </h2>
+        <div></div>
         <Button
           onClick={() => handleOpenModal()}
           className="flex items-center gap-2"
@@ -136,20 +135,17 @@ export function StaffManagementPage({
               </td>
               <td className="px-2 py-3">
                 <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <IconButton
+                    icon={Pencil}
                     onClick={() => handleOpenModal(user)}
-                  >
-                    <Edit2 className="h-3 w-3" />
-                  </Button>
-                  <Button
+                    title="Edit User"
+                  />
+                  <IconButton
+                    icon={Trash2}
                     variant="danger"
-                    size="sm"
                     onClick={() => handleDelete(user.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                    title="Remove User"
+                  />
                 </div>
               </td>
             </tr>

@@ -136,6 +136,11 @@ export const createClient = async (clientData) => {
   return data;
 };
 
+export const deleteClient = async (clientId) => {
+  const { data } = await api.delete(`/api/clients/${clientId}`);
+  return data;
+};
+
 // Bookings
 export const fetchBookings = async () => {
   const { data } = await api.get("/api/bookings");

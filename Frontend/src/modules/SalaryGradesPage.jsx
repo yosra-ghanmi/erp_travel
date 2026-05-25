@@ -79,9 +79,7 @@ export function SalaryGradesPage({ searchQuery }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-          Salary Grades
-        </h2>
+        <div></div>
         <Button
           onClick={() => handleOpenModal()}
           className="flex items-center gap-2"

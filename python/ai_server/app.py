@@ -239,6 +239,41 @@ def _ensure_app_tables():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Create users table first as other tables reference it
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL,
+            agency_id TEXT,
+            preferred_language TEXT DEFAULT 'en',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+    # Seed default users if table is empty
+    cursor.execute("SELECT COUNT(*) FROM users")
+    if cursor.fetchone()[0] == 0:
+        logger.info("Seeding default demo users...")
+        default_users = [
+            ("USR-1001", "Platform Owner", "super@navigo.com", hashlib.sha256("123456".encode()).hexdigest(), "superadmin", None),
+            ("USR-1002", "Amina Atlas", "admin@navigo.com", hashlib.sha256("123456".encode()).hexdigest(), "admin", "AG-001"),
+            ("USR-1003", "Rayan Agent", "agent@navigo.com", hashlib.sha256("123456".encode()).hexdigest(), "agent", "AG-001"),
+            ("USR-1006", "Salma Finance", "finance@navigo.com", hashlib.sha256("123456".encode()).hexdigest(), "finance", "AG-001"),
+            ("USR-1007", "HR Manager", "hr@navigo.com", hashlib.sha256("123456".encode()).hexdigest(), "hr", None),
+        ]
+        cursor.executemany(
+            """
+            INSERT INTO users (id, name, email, password, role, agency_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [(u[0], u[1], u[2], u[3], u[4], u[5], datetime.utcnow().isoformat()) for u in default_users]
+        )
+
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS user_sessions (

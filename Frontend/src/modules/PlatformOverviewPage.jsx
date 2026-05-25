@@ -160,9 +160,6 @@ export function PlatformOverviewPage({
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Welcome back, Admin
         </p>
-        <h1 className="text-3xl font-semibold tracking-[-0.01em] text-slate-900 dark:text-white">
-          Platform Overview
-        </h1>
       </section>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <PremiumStatCard

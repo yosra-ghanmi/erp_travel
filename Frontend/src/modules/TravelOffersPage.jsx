@@ -1,10 +1,11 @@
+import { Loader2, Plus, Trash2, X, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, X, Edit2 } from "lucide-react";
+import { Button, IconButton, Input, Panel } from "../components/ui";
 import {
   syncOffers,
   createTravelOffer,
   deleteTravelOffer,
-  updateTravelOffer, // Ensure this is imported
+  updateTravelOffer,
 } from "../services/erpApi";
 
 export function TravelOffersPage({ role, searchQuery }) {
@@ -128,31 +129,24 @@ export function TravelOffersPage({ role, searchQuery }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            Travel Offers
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-gray-500 dark:text-slate-400">
             Sync offers from Business Central.
           </p>
         </div>
         {isSuperAdmin && (
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-          >
+          <Button onClick={() => setShowAddForm(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Create Offer
-          </button>
+          </Button>
         )}
       </div>
 
       {showAddForm && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-6 shadow-sm">
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-              {editingOffer ? "Edit Travel Offer" : "Create New Travel Offer"}
-            </h2>
-            <button
+        <Panel
+          title={editingOffer ? "Edit Travel Offer" : "Create New Travel Offer"}
+          right={
+            <IconButton
+              icon={X}
               onClick={() => {
                 setShowAddForm(false);
                 setEditingOffer(null);
@@ -168,45 +162,41 @@ export function TravelOffersPage({ role, searchQuery }) {
                   highlights: [],
                 });
               }}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+            />
+          }
+        >
           <form onSubmit={handleCreateOffer} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                   Offer Title
                 </label>
-                <input
+                <Input
                   type="text"
                   required
                   value={newOffer.title}
                   onChange={(e) =>
                     setNewOffer({ ...newOffer, title: e.target.value })
                   }
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   placeholder="e.g. Luxury Safari in Kenya"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                   Destination
                 </label>
-                <input
+                <Input
                   type="text"
                   required
                   value={newOffer.destination}
                   onChange={(e) =>
                     setNewOffer({ ...newOffer, destination: e.target.value })
                   }
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   placeholder="e.g. Nairobi & Maasai Mara"
                 />
               </div>
               <div className="space-y-1 md:col-span-2">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                   Summary
                 </label>
                 <textarea
@@ -215,16 +205,16 @@ export function TravelOffersPage({ role, searchQuery }) {
                   onChange={(e) =>
                     setNewOffer({ ...newOffer, summary: e.target.value })
                   }
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   rows={3}
                   placeholder="Describe the travel offer highlights..."
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                   Duration (Days)
                 </label>
-                <input
+                <Input
                   type="number"
                   required
                   min={1}
@@ -235,15 +225,14 @@ export function TravelOffersPage({ role, searchQuery }) {
                       duration_days: parseInt(e.target.value),
                     })
                   }
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                     Price
                   </label>
-                  <input
+                  <Input
                     type="number"
                     required
                     min={0}
@@ -254,97 +243,69 @@ export function TravelOffersPage({ role, searchQuery }) {
                         price: parseFloat(e.target.value),
                       })
                     }
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                     Currency
                   </label>
-                  <select
+                  <Input
+                    type="text"
+                    required
                     value={newOffer.currency}
                     onChange={(e) =>
                       setNewOffer({ ...newOffer, currency: e.target.value })
                     }
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                    <option value="TND">TND</option>
-                  </select>
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                     Start Date
                   </label>
-                  <input
+                  <Input
                     type="date"
                     required
                     value={newOffer.startDate}
                     onChange={(e) =>
                       setNewOffer({ ...newOffer, startDate: e.target.value })
                     }
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">
+                  <label className="text-[10px] uppercase font-bold text-gray-500 dark:text-slate-400">
                     End Date
                   </label>
-                  <input
+                  <Input
                     type="date"
                     required
                     value={newOffer.endDate}
                     onChange={(e) =>
                       setNewOffer({ ...newOffer, endDate: e.target.value })
                     }
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
             </div>
             <div className="flex justify-end gap-3">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setShowAddForm(false);
                   setEditingOffer(null);
-                  setNewOffer({
-                    title: "",
-                    destination: "",
-                    summary: "",
-                    duration_days: 7,
-                    price: 0,
-                    currency: "USD",
-                    startDate: "2026-01-15",
-                    endDate: "2026-02-15",
-                    highlights: [],
-                  });
                 }}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 px-6 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-xl bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {loading
-                  ? editingOffer
-                    ? "Updating..."
-                    : "Creating..."
-                  : editingOffer
-                  ? "Update Offer"
-                  : "Create Offer"}
-              </button>
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? "Saving..." : editingOffer ? "Update Offer" : "Create Offer"}
+              </Button>
             </div>
           </form>
-        </div>
+        </Panel>
       )}
 
       {error ? (
@@ -360,47 +321,61 @@ export function TravelOffersPage({ role, searchQuery }) {
             Syncing offers...
           </div>
         ) : filteredOffers.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredOffers.map((offer) => (
               <div
                 key={offer.id}
-                className="group relative rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 hover:border-indigo-200 dark:hover:border-indigo-500 hover:shadow-md transition-all"
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-slate-800 dark:bg-slate-900/50"
               >
-                {isSuperAdmin && String(offer.id).startsWith("OFFER-") && (
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleEditOffer(offer)}
-                      className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-                      title="Edit offer"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteOffer(offer.id)}
-                      className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400"
-                      title="Delete local offer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                {offer.imageUrl && (
+                  <div className="h-48 w-full overflow-hidden">
+                    <img
+                      src={offer.imageUrl}
+                      alt={offer.title}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
                   </div>
                 )}
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                <div className="flex flex-1 flex-col p-5">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:bg-brand-500/10 dark:text-brand-400">
+                      {offer.destination}
+                    </span>
+                    <span className="text-sm font-black text-gray-900 dark:text-white">
+                      {offer.price} {offer.currency || offer.currencyCode}
+                    </span>
+                  </div>
+                  <h3 className="mb-2 text-lg font-bold leading-tight text-gray-900 dark:text-white">
                     {offer.title}
+                  </h3>
+                  <p className="mb-4 flex-1 text-sm leading-relaxed text-gray-500 dark:text-slate-400 line-clamp-3">
+                    {offer.summary}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {offer.destination || "Multiple destinations"}
-                  </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
-                    {offer.summary || "Premium travel offer."}
-                  </p>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    {offer.duration_days
-                      ? `${offer.duration_days} days • `
-                      : ""}
-                    {offer.price
-                      ? `${offer.price} ${offer.currency || ""}`
-                      : "Pricing on request"}
+
+                  <div className="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-slate-800">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        Duration
+                      </span>
+                      <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                        {offer.duration_days || offer.durationDays} Days
+                      </span>
+                    </div>
+                    {isSuperAdmin && (
+                      <div className="flex gap-1">
+                        <IconButton
+                          icon={Pencil}
+                          onClick={() => handleEditOffer(offer)}
+                          title="Edit offer"
+                        />
+                        <IconButton
+                          icon={Trash2}
+                          variant="danger"
+                          onClick={() => handleDeleteOffer(offer.id)}
+                          title="Delete local offer"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
