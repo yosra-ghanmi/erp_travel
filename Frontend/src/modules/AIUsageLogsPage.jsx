@@ -35,7 +35,7 @@ export function AIUsageLogsPage({ logs, agencies, searchQuery }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <Card title="Total API Cost (MTD)" value={`$${totalApiCost.toFixed(2)}`} hint="Current month-to-date AI cost" />
+        <Card title="Total API Cost (MTD)" value={`TND ${totalApiCost.toFixed(2)}`} hint="Current month-to-date AI cost" />
         <Card title="Avg. Tokens/Request" value={avgTokens} hint={`${filteredLogs.length} total requests`} />
         <Card title="Most Active Tenant" value={mostActiveTenant} hint="By request volume" />
       </div>
@@ -57,7 +57,7 @@ export function AIUsageLogsPage({ logs, agencies, searchQuery }) {
               <td className="px-2 py-3 font-medium">{agencies.find((agency) => agency.id === log.agency_id)?.name ?? '-'}</td>
               <td className="px-2 py-3">{log.user}</td>
               <td className="px-2 py-3 text-right tabular-nums">{log.promptTokens.toLocaleString()}</td>
-              <td className="px-2 py-3 text-right tabular-nums">${log.cost.toFixed(2)}</td>
+              <td className="px-2 py-3 text-right tabular-nums">TND {log.cost.toFixed(2)}</td>
               <td className="px-2 py-3 text-xs">{log.at}</td>
             </tr>
           ))}

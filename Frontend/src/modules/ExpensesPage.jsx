@@ -164,8 +164,8 @@ export function ExpensesPage({ searchQuery }) {
                   }`}
                 >
                   {exp.type === "Refund"
-                    ? `+$${exp.amount}`
-                    : `-$${exp.amount}`}
+                    ? `+TND ${exp.amount}`
+                    : `-TND ${exp.amount}`}
                 </td>
                 <td className="px-2 py-3 text-xs text-slate-500 dark:text-slate-400">
                   {exp.date}

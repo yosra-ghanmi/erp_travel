@@ -29,7 +29,7 @@ export function ReportsPage({ bookings, payments, destinations }) {
     doc.setFontSize(16)
     doc.text('Travel Agency Reports', 20, 20)
     doc.setFontSize(12)
-    doc.text(`Total Revenue: $${totalRevenue}`, 20, 40)
+    doc.text(`Total Revenue: TND ${totalRevenue}`, 20, 40)
     doc.text(`Confirmed Bookings: ${confirmedBookings}`, 20, 50)
     doc.text(`Canceled Bookings: ${canceledBookings}`, 20, 60)
     doc.save('travel-reports.pdf')
@@ -39,7 +39,7 @@ export function ReportsPage({ bookings, payments, destinations }) {
     <div className="grid gap-6 xl:grid-cols-3">
       <Panel title="Financial & Booking Performance">
         <div className="space-y-2 text-sm">
-          <p>Total revenue: <span className="font-semibold text-emerald-600">${totalRevenue.toLocaleString()}</span></p>
+          <p>Total revenue: <span className="font-semibold text-emerald-600">TND ${totalRevenue.toLocaleString()}</span></p>
           <p>Confirmed bookings: <span className="font-semibold">{confirmedBookings}</span></p>
           <p>Canceled bookings: <span className="font-semibold">{canceledBookings}</span></p>
         </div>

@@ -262,7 +262,7 @@ function AppWorkspace() {
   const [settings, setSettings] = useState({
     trialDays: 14,
     aiRateLimit: 120,
-    currency: "USD",
+    currency: "TND",
     sessionTimeout: 180,
     mfaSuperAdmin: true,
     strictTenantIsolation: true,

@@ -1660,6 +1660,21 @@ def create_quote(quote: TravelQuote, client: SecureBCClient = Depends(get_secure
         if not header_payload.get("currencyCode"):
             header_payload["currencyCode"] = "TND"
 
+        # Ensure BC receives valid date values, especially in demo/test licenses with a restricted date window.
+        today_date = date.today()
+        if not header_payload.get("quoteDate"):
+            header_payload["quoteDate"] = today_date.isoformat()
+        if not header_payload.get("validUntilDate"):
+            header_payload["validUntilDate"] = (today_date + timedelta(days=30)).isoformat()
+        elif header_payload.get("quoteDate"):
+            try:
+                quote_date = date.fromisoformat(header_payload["quoteDate"])
+                valid_until_date = date.fromisoformat(header_payload["validUntilDate"])
+                if valid_until_date < quote_date:
+                    header_payload["validUntilDate"] = (quote_date + timedelta(days=30)).isoformat()
+            except Exception:
+                pass
+
         # 2. Create Header (triggers first line in BC)
         result = client.secure_create("quotes", header_payload)
         quote_no = result.get("quoteno")

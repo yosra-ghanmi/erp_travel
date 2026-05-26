@@ -25,6 +25,8 @@ import {
   syncOffers,
 } from "../services/erpApi";
 
+const formatDate = (value) => value.toISOString().split("T")[0];
+const today = new Date();
 const initialForm = {
   clientNo: "",
   lineType: "Service",
@@ -34,9 +36,10 @@ const initialForm = {
   numberOfNights: 1, // Number of Nights
   discount_percent: 0,
   // Environment Note: Business Central license restricts dates to specific months (Nov, Dec, Jan, Feb)
-  quoteDate: "2026-01-15",
-  validUntilDate: "2026-02-15",
+  quoteDate: formatDate(today),
+  validUntilDate: formatDate(new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)),
   status: "Draft",
+  currencyCode: "TND",
 };
 
 const loadImage = (src) =>
@@ -184,7 +187,7 @@ export function QuotesPage({ agencyId, searchQuery }) {
     setMessage("");
     try {
       // If multiple services are selected, we pass them as serviceItems
-      const quoteData = { ...form };
+      const quoteData = { ...form, currencyCode: "TND" };
       if (form.serviceCodes.length > 0) {
         quoteData.serviceCode = ""; // Clear singular if multiple are used
         quoteData.serviceItems = form.serviceCodes.map((code) => ({

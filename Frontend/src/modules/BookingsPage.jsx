@@ -155,7 +155,7 @@ export function BookingsPage() {
                 <td className="px-2 py-3 text-xs text-gray-500 dark:text-gray-400">
                   {booking.startdate} → {booking.enddate}
                 </td>
-                <td className="px-2 py-3 font-bold text-blue-600 dark:text-brand-400">${booking.amount}</td>
+                <td className="px-2 py-3 font-bold text-blue-600 dark:text-brand-400">TND ${booking.amount}</td>
                 <td className="px-2 py-3">
                   <div className="flex gap-2">
                     <IconButton

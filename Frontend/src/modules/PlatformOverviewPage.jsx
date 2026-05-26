@@ -153,14 +153,6 @@ export function PlatformOverviewPage({
 
   return (
     <div className="space-y-8">
-      <section className="space-y-2">
-        <p className="text-xs tracking-wide text-slate-500 dark:text-slate-400">
-          Navigo / Dashboard
-        </p>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Welcome back, Admin
-        </p>
-      </section>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <PremiumStatCard
           title="Active Tenants"
@@ -171,7 +163,7 @@ export function PlatformOverviewPage({
         />
         <PremiumStatCard
           title="Platform Revenue"
-          value={`$${totalRevenue.toLocaleString()}`}
+          value={`TND ${totalRevenue.toLocaleString()}`}
           trend="Live payment aggregate"
           hint="Sum of payments"
           icon={<StatIconRevenue />}

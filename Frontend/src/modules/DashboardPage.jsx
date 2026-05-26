@@ -60,7 +60,7 @@ export function DashboardPage({
         />
         <Card
           title="Revenue"
-          value={`$${revenue.toLocaleString()}`}
+          value={`TND ${revenue.toLocaleString()}`}
           hint="From active payments"
           icon={Wallet}
         />

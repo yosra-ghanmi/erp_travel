@@ -68,7 +68,7 @@ export function TripsPage({ trips, setTrips, bookings, searchQuery }) {
                 </td>
                 <td className="px-2 py-3">{trip.destination}</td>
                 <td className="px-2 py-3">{trip.duration} days</td>
-                <td className="px-2 py-3">${trip.price}</td>
+                <td className="px-2 py-3">TND ${trip.price}</td>
                 <td className="px-2 py-3 text-xs">{trip.services}</td>
                 <td className="px-2 py-3">{trip.seatsLeft} seats</td>
                 <td className="px-2 py-3">

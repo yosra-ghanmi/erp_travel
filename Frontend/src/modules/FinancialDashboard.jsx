@@ -212,9 +212,9 @@ export function FinancialDashboard() {
     doc.text(`Date Range: ${reportRange.replace(/_/g, " ")}`, 40, 65);
 
     const summaryLines = [
-      `Total Revenue: $${reportStats.totalRevenue.toLocaleString()}`,
-      `Total Expenses: $${reportStats.totalExpenses.toLocaleString()}`,
-      `Net Profit: $${reportStats.profit.toLocaleString()}`,
+      `Total Revenue: TND ${reportStats.totalRevenue.toLocaleString()}`,
+      `Total Expenses: TND ${reportStats.totalExpenses.toLocaleString()}`,
+      `Net Profit: TND ${reportStats.profit.toLocaleString()}`,
       `Profit Margin: ${reportStats.profitMargin}%`,
     ];
 
@@ -226,7 +226,7 @@ export function FinancialDashboard() {
     doc.text("Expense distribution:", 40, currentY);
     currentY += 16;
     reportStats.expenseDistribution.forEach((item) => {
-      doc.text(`- ${item.name}: $${item.value.toLocaleString()}`, 48, currentY);
+      doc.text(`- ${item.name}: TND ${item.value.toLocaleString()}`, 48, currentY);
       currentY += 14;
     });
 
@@ -289,7 +289,7 @@ export function FinancialDashboard() {
         /_/g,
         " "
       )})`;
-      const body = `A finance report has been generated for the selected range.\n\nTotal Revenue: $${reportStats.totalRevenue.toLocaleString()}\nTotal Expenses: $${reportStats.totalExpenses.toLocaleString()}\nNet Profit: $${reportStats.profit.toLocaleString()}\nProfit Margin: ${
+      const body = `A finance report has been generated for the selected range.\n\nTotal Revenue: TND ${reportStats.totalRevenue.toLocaleString()}\nTotal Expenses: TND ${reportStats.totalExpenses.toLocaleString()}\nNet Profit: TND ${reportStats.profit.toLocaleString()}\nProfit Margin: ${
         reportStats.profitMargin
       }%`;
 
@@ -424,19 +424,19 @@ export function FinancialDashboard() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Card
               title="Total Revenue"
-              value={`$${reportStats.totalRevenue.toLocaleString()}`}
+              value={`TND ${reportStats.totalRevenue.toLocaleString()}`}
               icon={DollarSign}
               hint="Total payments received"
             />
             <Card
               title="Total Expenses"
-              value={`$${reportStats.totalExpenses.toLocaleString()}`}
+              value={`TND ${reportStats.totalExpenses.toLocaleString()}`}
               icon={TrendingDown}
               hint="Operating costs"
             />
             <Card
               title="Net Profit"
-              value={`$${reportStats.profit.toLocaleString()}`}
+              value={`TND ${reportStats.profit.toLocaleString()}`}
               icon={TrendingUp}
               hint="Revenue minus expenses"
             />
@@ -511,7 +511,7 @@ export function FinancialDashboard() {
                       style={{ backgroundColor: COLORS[index % COLORS.length] }}
                     />
                     <span className="text-xs text-slate-600 dark:text-slate-400">
-                      {item.name} (${item.value.toLocaleString()})
+                      {item.name} ({item.value.toLocaleString()} TND)
                     </span>
                   </div>
                 ))}
