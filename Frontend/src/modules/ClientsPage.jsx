@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
-import { Button, DataTable, IconButton, Input, Panel, Select } from "../components/ui";
+import { Button, DataTable, IconButton, Input, Panel, Select, StatusBadge } from "../components/ui";
 import { Pencil, Trash2 } from "lucide-react";
-import { createClient, fetchClients, deleteClient } from "../services/erpApi";
+import { createClient, fetchClients } from "../services/erpApi";
 
 const defaultClient = {
   name: "",
@@ -20,11 +20,13 @@ export function ClientsPage({
   canDelete,
   agencyId,
   searchQuery,
+  pushNotification,
 }) {
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState(defaultClient);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     const loadClients = async () => {
@@ -50,9 +52,15 @@ export function ClientsPage({
   }, [agencyId, setClients]);
 
   const saveClient = async () => {
-    if (!form.name || !form.email) return;
+    if (!form.name || !form.email) {
+      setError("Name and email are required.");
+      setMessage("");
+      return;
+    }
+
     setLoading(true);
     setError("");
+    setMessage("");
 
     try {
       if (editingId) {
@@ -62,6 +70,11 @@ export function ClientsPage({
             item.id === editingId ? { ...item, ...form } : item
           )
         );
+        setMessage("Client updated successfully.");
+        if (pushNotification)
+          pushNotification("Client updated successfully.", {
+            category: "success",
+          });
       } else {
         // Real creation in Business Central
         const result = await createClient(form);
@@ -71,12 +84,19 @@ export function ClientsPage({
           ...form,
         };
         setClients((prev) => [...prev, newClient]);
+        setMessage("Client created successfully.");
+        if (pushNotification)
+          pushNotification("Client created successfully.", {
+            category: "success",
+          });
       }
       setEditingId("");
       setForm(defaultClient);
     } catch (err) {
       console.error("BC Save failed:", err);
-      setError("Failed to save to Business Central. Client added locally.");
+      setError("Failed to save client. Please try again.");
+      if (pushNotification)
+        pushNotification("Failed to save client.", { category: "error" });
       if (!editingId) {
         const fallbackId = `CL-${1000 + (clients?.length || 0) + 1}`;
         setClients((prev) => [
@@ -98,11 +118,17 @@ export function ClientsPage({
       country: client.country || "",
       notes: client.notes || "",
     });
+    setError("");
+    setMessage("");
   };
 
-  const deleteClient = (clientId) => {
+  const handleDeleteClient = (clientId) => {
     if (!canDelete) return;
     setClients((prev) => prev.filter((client) => client.id !== clientId));
+    setMessage("Client deleted successfully.");
+    setError("");
+    if (pushNotification)
+      pushNotification("Client deleted successfully.", { category: "success" });
   };
 
   const filtered = useMemo(() => {
@@ -128,6 +154,9 @@ export function ClientsPage({
         >
           {error && (
             <div className="mb-4 text-xs text-rose-500 font-medium">{error}</div>
+          )}
+          {message && (
+            <div className="mb-4 text-sm text-emerald-600 font-medium">{message}</div>
           )}
           <div className="flex-1 overflow-y-auto max-h-[600px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <DataTable
@@ -158,7 +187,7 @@ export function ClientsPage({
                         <IconButton
                           icon={Trash2}
                           variant="danger"
-                          onClick={() => deleteClient(client.id)}
+                          onClick={() => handleDeleteClient(client.id)}
                           disabled={loading}
                           title="Delete"
                         />

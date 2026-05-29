@@ -761,6 +761,7 @@ function AppWorkspace() {
           canDelete={hasPermission("clients", "delete")}
           agencyId={agencyId}
           searchQuery={searchQuery}
+          pushNotification={pushNotification}
         />
       );
     }

@@ -10,5 +10,29 @@
     "start_date": "2026-01-15",
     "end_date": "2026-02-15",
     "highlights": []
+  },
+  {
+    "id": "OFFER-1779884470595",
+    "title": "Tunisia Beach Escape",
+    "destination": "Djerba, Tunisia \ud83c\udfdd\ufe0f",
+    "summary": "\ud83c\udfd6\ufe0f Perfect summer getaway for families and couples. Includes seaside hotel accommodation, guided tours of Sidi Bou Said and Carthage, daily breakfast, and airport transfers. \ud83c\udf05 Ideal for travelers seeking sun, culture, and relaxation on the Mediterranean coast. \ud83c\udf0a",
+    "duration_days": 7,
+    "price": 2200.0,
+    "currency": "TND",
+    "start_date": "2026-01-15",
+    "end_date": "2026-01-22",
+    "highlights": []
+  },
+  {
+    "id": "OFFER-1779884606293",
+    "title": "Sahara Desert Adventure",
+    "destination": "Douz, Tunisia",
+    "summary": "\ud83d\udc2a Unforgettable desert experience in the gateway to the Sahara. Includes camel trekking, overnight stay in a traditional Berber camp under the stars, 4x4 dune excursions, and all meals. \u2b50 Perfect for adventure seekers and nature lovers.",
+    "duration_days": 4,
+    "price": 1200.0,
+    "currency": "TND",
+    "start_date": "2026-10-15",
+    "end_date": "2026-10-19",
+    "highlights": []
   }
 ]
