@@ -1850,7 +1850,7 @@ def delete_invoice(invoice_no: str, client: SecureBCClient = Depends(get_secure_
 # --- MAILING ---
 
 @app.post("/api/send-email")
-def send_email(req: EmailRequest):
+def send_email_endpoint(req: EmailRequest):
     try:
         success = send_email_with_attachment(
             to_email=req.to_email,
