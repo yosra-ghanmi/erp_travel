@@ -36,7 +36,7 @@ export const permissionsMap = {
   agent: {
     agencies: { create: false, read: false, update: false, delete: false },
     staff: { create: false, read: false, update: false, delete: false },
-    clients: { create: true, read: true, update: true, delete: false },
+    clients: { create: true, read: true, update: true, delete: true },
     bookings: { create: true, read: true, update: true, delete: false },
     services: {
       create: false,
